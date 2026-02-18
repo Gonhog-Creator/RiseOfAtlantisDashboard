@@ -5,6 +5,4 @@
 *.iml
 .idea/
 
-#Yaml files and Excel files (For data security)
-*.yaml
-*.xlsx
+
