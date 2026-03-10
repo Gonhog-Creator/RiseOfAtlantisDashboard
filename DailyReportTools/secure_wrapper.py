@@ -138,6 +138,10 @@ def load_csv_from_github():
             files = response.json()
             csv_files = [f for f in files if f['name'].endswith('.csv')]
             
+            if not csv_files:
+                st.sidebar.warning("⚠️ No CSV files found in remote repository")
+                return None
+            
             all_data = []
             for file_info in csv_files:
                 # Download each CSV file
@@ -151,15 +155,20 @@ def load_csv_from_github():
                         # Add filename info
                         df['source_file'] = file_info['name']
                         all_data.append(df)
+                        st.sidebar.success(f"✅ Loaded {file_info['name']}")
+                else:
+                    st.sidebar.error(f"❌ Failed to load {file_info['name']}")
             
             if all_data:
                 return pd.concat(all_data, ignore_index=True)
             else:
                 return None
         else:
+            st.sidebar.error(f"❌ Failed to access repository: {response.status_code}")
             return None
             
     except Exception as e:
+        st.sidebar.error(f"❌ Error loading remote CSV files: {e}")
         return None
 
 def load_csv_files():
@@ -202,22 +211,23 @@ def main():
     
     # Import and run the original dashboard
     try:
-        # Import the original dashboard functions
-        import sys
-        sys.path.append(os.path.dirname(__file__))
+        # Get the current directory and dashboard path
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        dashboard_path = os.path.join(current_dir, 'dashboard.py')
         
-        # Import dashboard functions
-        from dashboard import calculate_daily_rate
+        # Read and execute the dashboard code
+        with open(dashboard_path, 'r') as f:
+            dashboard_code = f.read()
         
-        # Set page config (original dashboard does this)
-        st.set_page_config(page_title="Realm Analytics Dashboard", layout="wide")
+        # Execute the dashboard code in the current namespace
+        exec(dashboard_code, globals())
         
-        # Import and run the dashboard code
-        exec(open('dashboard.py').read())
-        
+    except FileNotFoundError:
+        st.error(f"❌ Dashboard file not found at: {dashboard_path}")
+        st.info("Please ensure dashboard.py is in the DailyReportTools directory")
     except Exception as e:
-        st.error(f"Error loading dashboard: {e}")
-        st.info("Please ensure dashboard.py is in the same directory")
+        st.error(f"❌ Error loading dashboard: {e}")
+        st.info("Please check the dashboard.py file for any syntax errors")
 
 if __name__ == "__main__":
     main()
