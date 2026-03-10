@@ -6,9 +6,9 @@ from plotly.subplots import make_subplots
 import os
 from datetime import datetime
 import glob
-from speedups import create_speedups_tab
-from resources import create_resources_tab
-from overview import create_overview_tab
+from Tabs.speedups import create_speedups_tab
+from Tabs.resources import create_resources_tab
+from Tabs.overview import create_overview_tab
 
 def calculate_daily_rate(values, dates):
     """Calculate true daily rate based on time differences between reports"""
