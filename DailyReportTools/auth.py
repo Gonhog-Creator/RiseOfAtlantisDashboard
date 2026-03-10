@@ -6,41 +6,15 @@ from datetime import datetime, timedelta
 import jwt
 from functools import wraps
 
-# Configuration - Load from Streamlit secrets
+# Configuration - Load from Streamlit secrets (secure - not in GitHub)
 try:
     # For Streamlit Community Cloud
     SECRET_KEY = st.secrets["secret_key"]
     ADMIN_USERS = dict(st.secrets["admin_users"])
     
-    # Debug: Show what we loaded (remove this after fixing)
-    if st.query_params.get("debug") == "true":
-        st.sidebar.write("✅ Secrets loaded successfully")
-        st.sidebar.write(f"Users: {list(ADMIN_USERS.keys())}")
-        
 except Exception as e:
-    # Fallback for local development
-    st.sidebar.error(f"Error loading secrets: {e}")
-    SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here-change-in-production")
-    
-    # Load users from environment variable or use defaults
-    def load_users():
-        """Load user credentials from environment variable"""
-        users_env = os.getenv("ADMIN_USERS")
-        if users_env:
-            try:
-                return json.loads(users_env)
-            except json.JSONDecodeError:
-                st.error("Invalid ADMIN_USERS format. Using default users.")
-        
-        # Default users (for local development)
-        return {
-            "admin": hashlib.sha256("admin123".encode()).hexdigest(),
-            "user": hashlib.sha256("user123".encode()).hexdigest()
-        }
-    
-    ADMIN_USERS = load_users()
-    if st.query_params.get("debug") == "true":
-        st.sidebar.write("Using fallback configuration")
+    st.error(f"❌ Please configure secrets in Streamlit Community Cloud settings!")
+    st.stop()
 
 def generate_token(username):
     """Generate JWT token for authenticated user"""
