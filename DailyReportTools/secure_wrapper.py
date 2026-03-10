@@ -121,50 +121,104 @@ def show_logout_button():
 def load_csv_from_github():
     """Load CSV files from private GitHub repository"""
     if not GITHUB_TOKEN or not CSV_REPO_URL:
+        st.sidebar.warning("⚠️ GitHub token or repository URL not configured")
         return None
     
     try:
-        # Get list of CSV files from repo
-        api_url = CSV_REPO_URL.replace("github.com", "api.github.com/repos")
-        api_url = api_url.replace("/tree/main", "/contents")
+        # Extract owner and repo from URL
+        if "/tree/" in CSV_REPO_URL:
+            # Handle URL with branch path
+            repo_parts = CSV_REPO_URL.split("/tree/")
+            repo_base = repo_parts[0]
+            branch = repo_parts[1] if len(repo_parts) > 1 else "main"
+        else:
+            # Handle simple repo URL
+            repo_base = CSV_REPO_URL
+            branch = "main"
+        
+        # Extract owner and repo name
+        url_parts = repo_base.replace("https://github.com/", "").split("/")
+        if len(url_parts) < 2:
+            st.sidebar.error("❌ Invalid repository URL format")
+            return None
+        
+        owner, repo = url_parts[0], url_parts[1]
+        
+        # API URL for repository contents
+        api_url = f"https://api.github.com/repos/{owner}/{repo}/contents"
         
         headers = {
             "Authorization": f"token {GITHUB_TOKEN}",
-            "Accept": "application/vnd.github.v3+json"
+            "Accept": "application/vnd.github.v3+json",
+            "User-Agent": "Streamlit-Dashboard"
         }
         
+        st.sidebar.write(f"🔍 Checking repository: {owner}/{repo}")
+        
         response = requests.get(api_url, headers=headers)
+        
+        # Debug: Show response status and content type
+        st.sidebar.write(f"📡 API Response: {response.status_code}")
+        
         if response.status_code == 200:
-            files = response.json()
-            csv_files = [f for f in files if f['name'].endswith('.csv')]
-            
-            if not csv_files:
-                st.sidebar.warning("⚠️ No CSV files found in remote repository")
-                return None
-            
-            all_data = []
-            for file_info in csv_files:
-                # Download each CSV file
-                download_url = f"https://raw.githubusercontent.com/{CSV_REPO_URL.split('/')[-2]}/{CSV_REPO_URL.split('/')[-1]}/main/{file_info['name']}"
-                csv_response = requests.get(download_url)
+            try:
+                files = response.json()
                 
-                if csv_response.status_code == 200:
-                    csv_data = csv_response.text
-                    df = pd.read_csv(StringIO(csv_data))
-                    if not df.empty:
-                        # Add filename info
-                        df['source_file'] = file_info['name']
-                        all_data.append(df)
-                        st.sidebar.success(f"✅ Loaded {file_info['name']}")
+                # Check if we got a valid JSON response
+                if isinstance(files, str):
+                    st.sidebar.error(f"❌ API returned string instead of JSON: {files[:100]}...")
+                    return None
+                
+                if not isinstance(files, list):
+                    st.sidebar.error(f"❌ Unexpected API response format")
+                    return None
+                
+                csv_files = [f for f in files if f.get('name', '').endswith('.csv')]
+                
+                st.sidebar.write(f"📁 Found {len(csv_files)} CSV files")
+                
+                if not csv_files:
+                    st.sidebar.warning("⚠️ No CSV files found in remote repository")
+                    return None
+                
+                all_data = []
+                for file_info in csv_files:
+                    try:
+                        # Download each CSV file
+                        download_url = file_info.get('download_url')
+                        if not download_url:
+                            st.sidebar.error(f"❌ No download URL for {file_info.get('name', 'unknown')}")
+                            continue
+                        
+                        csv_response = requests.get(download_url, headers=headers)
+                        
+                        if csv_response.status_code == 200:
+                            csv_data = csv_response.text
+                            df = pd.read_csv(StringIO(csv_data))
+                            if not df.empty:
+                                # Add filename info
+                                df['source_file'] = file_info['name']
+                                all_data.append(df)
+                                st.sidebar.success(f"✅ Loaded {file_info['name']}")
+                            else:
+                                st.sidebar.warning(f"⚠️ Empty file: {file_info['name']}")
+                        else:
+                            st.sidebar.error(f"❌ Failed to download {file_info['name']}: {csv_response.status_code}")
+                    except Exception as e:
+                        st.sidebar.error(f"❌ Error processing {file_info.get('name', 'unknown')}: {e}")
+                
+                if all_data:
+                    return pd.concat(all_data, ignore_index=True)
                 else:
-                    st.sidebar.error(f"❌ Failed to load {file_info['name']}")
-            
-            if all_data:
-                return pd.concat(all_data, ignore_index=True)
-            else:
+                    return None
+                    
+            except ValueError as e:
+                st.sidebar.error(f"❌ Failed to parse JSON response: {e}")
+                st.sidebar.write(f"Raw response: {response.text[:200]}...")
                 return None
         else:
-            st.sidebar.error(f"❌ Failed to access repository: {response.status_code}")
+            st.sidebar.error(f"❌ GitHub API error: {response.status_code}")
+            st.sidebar.write(f"Response: {response.text[:200]}...")
             return None
             
     except Exception as e:
