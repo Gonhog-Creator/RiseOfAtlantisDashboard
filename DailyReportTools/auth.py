@@ -13,7 +13,7 @@ try:
     ADMIN_USERS = dict(st.secrets["admin_users"])
     
     # Debug: Show what we loaded (remove this after fixing)
-    if st.experimental_get_query_params().get('debug') == ['true']:
+    if st.query_params.get("debug") == "true":
         st.sidebar.write("✅ Secrets loaded successfully")
         st.sidebar.write(f"Users: {list(ADMIN_USERS.keys())}")
         
@@ -39,7 +39,7 @@ except Exception as e:
         }
     
     ADMIN_USERS = load_users()
-    if st.experimental_get_query_params().get('debug') == ['true']:
+    if st.query_params.get("debug") == "true":
         st.sidebar.write("Using fallback configuration")
 
 def generate_token(username):
@@ -85,7 +85,7 @@ def login_page():
     st.title("🔐 Realm Analytics - Login")
     
     # Debug info
-    debug_mode = st.experimental_get_query_params().get('debug') == ['true']
+    debug_mode = st.query_params.get("debug") == "true"
     if debug_mode:
         with st.expander("🔍 Debug Info"):
             st.write(f"Available users: {list(ADMIN_USERS.keys())}")
