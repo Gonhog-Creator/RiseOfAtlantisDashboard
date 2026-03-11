@@ -288,6 +288,9 @@ def create_overview_tab(filtered_df):
                         available_speedups.append(speedup_key)
                         break
             
+            # Debug: Show the order of available speedups
+            st.write(f"🔍 Available speedups in order: {available_speedups}")
+            
             if available_speedups:
                 # Create grid for speedup tiles (3 per row)
                 for i in range(0, len(available_speedups), 3):
