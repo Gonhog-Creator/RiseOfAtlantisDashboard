@@ -260,6 +260,63 @@ def create_overview_tab(filtered_df):
             
             # Date range info
             st.markdown("---")
+            
+            # Power Overview Section
+            st.markdown("### ⚔️ Power Overview")
+            
+            # Toggle for full numbers in power section
+            show_full_power = st.toggle("Show Full Numbers", key="power_full_numbers")
+            
+            if not filtered_df.empty:
+                # Get latest power data
+                sorted_df = filtered_df.sort_values('date')
+                latest_data = sorted_df.iloc[-1]
+                
+                # Extract power data from realm summary
+                total_power = latest_data.get('total_power', 0)
+                avg_power_per_player = latest_data.get('avg_power_per_player', 0)
+                latest_players = latest_data['total_players']
+                
+                # Calculate power growth rates
+                if len(sorted_df) >= 2:
+                    daily_power_rates = calculate_daily_rate(sorted_df, 'total_power')
+                    
+                    # Get the most recent meaningful (non-zero) change
+                    meaningful_changes = daily_power_rates.dropna()
+                    meaningful_changes = meaningful_changes[meaningful_changes != 0]
+                    daily_power_change = meaningful_changes.iloc[-1] if len(meaningful_changes) > 0 else 0
+                    
+                    # Calculate per player power growth
+                    daily_avg_power_rates = calculate_daily_rate(sorted_df, 'avg_power_per_player')
+                    
+                    # Get the most recent meaningful (non-zero) change for per player power
+                    avg_meaningful_changes = daily_avg_power_rates.dropna()
+                    avg_meaningful_changes = avg_meaningful_changes[avg_meaningful_changes != 0]
+                    daily_avg_power_change = avg_meaningful_changes.iloc[-1] if len(avg_meaningful_changes) > 0 else 0
+                else:
+                    daily_power_change = 0
+                    daily_avg_power_change = 0
+                
+                # Display power metrics
+                power_col1, power_col2 = st.columns(2)
+                
+                with power_col1:
+                    st.metric(
+                        "⚔️ Total Power",
+                        format_number(total_power, show_full_power),
+                        format_rate(daily_power_change, show_full_power)
+                    )
+                
+                with power_col2:
+                    st.metric(
+                        "👤 Power per Player",
+                        format_number(avg_power_per_player, show_full_power),
+                        format_rate(daily_avg_power_change, show_full_power)
+                    )
+            else:
+                st.info("No power data available")
+            
+            st.markdown("---")
             st.markdown("### 📈 Speedups Overview")
             
             # Define speedup items with their time durations in increasing order

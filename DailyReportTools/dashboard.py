@@ -9,6 +9,7 @@ import glob
 from Tabs.speedups import create_speedups_tab
 from Tabs.resources import create_resources_tab
 from Tabs.overview import create_overview_tab
+from Tabs.power import create_power_tab
 
 def calculate_daily_rate(values, dates):
     """Calculate true daily rate based on time differences between reports"""
@@ -53,10 +54,31 @@ def load_csv_files():
     
     for file_path in csv_files:
         try:
-            # Extract date from filename
+            # Extract date from filename (handle both formats)
             filename = os.path.basename(file_path)
-            date_str = filename.split("_")[3] + "_" + filename.split("_")[4].replace(".csv", "")
-            date = datetime.strptime(date_str, "%Y-%m-%d_%H%M%S")
+            parts = filename.split("_")
+            
+            # Handle old format: realm_Ruby_analytics_2026-03-14_235254.csv
+            if len(parts) >= 5 and parts[0] == "realm" and parts[2] == "analytics":
+                date_str = parts[3] + "_" + parts[4].replace(".csv", "")
+                # Old format has no time separators, parse as HHMMSS
+                if ":" not in date_str:
+                    time_part = date_str.split("_")[1]
+                    if len(time_part) == 6:  # HHMMSS format
+                        formatted_time = f"{time_part[:2]}:{time_part[2:4]}:{time_part[4:]}"
+                        date_str = date_str.split("_")[0] + "_" + formatted_time
+            # Handle new format: Ruby_2026-03-13_15-11-58.csv
+            elif len(parts) >= 3:
+                date_str = parts[1] + "_" + parts[2].replace(".csv", "")
+                # New format uses hyphens, convert to colons
+                if "-" in date_str:
+                    time_part = date_str.split("_")[1]
+                    formatted_time = time_part.replace("-", ":")
+                    date_str = date_str.split("_")[0] + "_" + formatted_time
+            else:
+                continue  # Skip unparseable filename
+            
+            date = datetime.strptime(date_str, "%Y-%m-%d_%H:%M:%S")
             
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
@@ -74,6 +96,10 @@ def load_csv_files():
                             realm_data['realm_name'] = line.split(';')[1].strip('"')
                         elif 'Total Players' in line:
                             realm_data['total_players'] = int(line.split(';')[1])
+                        elif 'Total Power' in line:
+                            realm_data['total_power'] = int(line.split(';')[1])
+                        elif 'Average Power per Player' in line:
+                            realm_data['avg_power_per_player'] = float(line.split(';')[1])
                 
                 elif 'Resources' in section:
                     lines = section.strip().split('\n')[1:]  # Skip header
@@ -158,7 +184,7 @@ else:
     filtered_df = filtered_df.sort_values('date')
     
     # Tabs for different views
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Overview", "👥 Player Count", "📈 Resources", "⚡ Speedups"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Overview", "👥 Player Count", "📈 Resources", "⚔️ Power", "⚡ Speedups"])
     
     with tab1:
         create_overview_tab(filtered_df)
@@ -268,6 +294,9 @@ else:
         create_resources_tab(filtered_df)
     
     with tab4:
+        create_power_tab(filtered_df)
+    
+    with tab5:
         create_speedups_tab(filtered_df)
     
     # Data table
@@ -283,8 +312,12 @@ else:
                 lambda x: x.get(resource, 0) if isinstance(x, dict) else 0
             )
         
+        # Add power columns
+        raw_data_df['TotalPower'] = raw_data_df['total_power']
+        raw_data_df['AvgPowerPerPlayer'] = raw_data_df['avg_power_per_player']
+        
         # Select columns to display
-        display_columns = ['date', 'realm_name', 'total_players'] + [f'{resource.title()}Sum' for resource in main_resources]
+        display_columns = ['date', 'realm_name', 'total_players', 'TotalPower', 'AvgPowerPerPlayer'] + [f'{resource.title()}Sum' for resource in main_resources]
         
         # Format the dataframe with commas for numbers
         formatted_df = raw_data_df[display_columns].copy()
@@ -293,6 +326,10 @@ else:
         
         # Format total_players as well
         formatted_df['total_players'] = formatted_df['total_players'].apply(lambda x: f"{int(x):,}" if pd.notna(x) else "0")
+        
+        # Format power columns
+        formatted_df['TotalPower'] = formatted_df['TotalPower'].apply(lambda x: f"{int(x):,}" if pd.notna(x) else "0")
+        formatted_df['AvgPowerPerPlayer'] = formatted_df['AvgPowerPerPlayer'].apply(lambda x: f"{int(x):,}" if pd.notna(x) else "0")
         
         st.dataframe(formatted_df, width='stretch')
 
