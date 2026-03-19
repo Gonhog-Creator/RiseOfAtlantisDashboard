@@ -11,6 +11,7 @@ from Tabs.speedups import create_speedups_tab
 from Tabs.resources import create_resources_tab
 from Tabs.overview import create_overview_tab
 from Tabs.power import create_power_tab
+from Tabs.items import create_items_tab
 
 def calculate_daily_rate(values, dates):
     """Calculate true daily rate based on time differences between reports"""
@@ -319,20 +320,21 @@ def load_csv_files_incremental():
                 all_data.append(parsed_data)
                 new_parsed_count += 1
     
-    # Show toast for new files (but no file caching)
-    if new_parsed_count > 0:
-        st.toast(f"📊 Processed {new_parsed_count} new/updated files", icon="✅")
-    
     # Sort by date
     all_data.sort(key=lambda x: x['date'])
     
-    return pd.DataFrame(all_data)
+    return pd.DataFrame(all_data), new_parsed_count
 
 # Fallback to original function for compatibility
-@st.cache_data(ttl=60)
 def load_csv_files():
     """Load and parse all CSV files from Daily Reports folder (legacy function)"""
-    return load_csv_files_incremental()
+    df, new_parsed_count = load_csv_files_incremental()
+    
+    # Show toast for new files (outside of cached function)
+    if new_parsed_count > 0:
+        st.toast(f"📊 Processed {new_parsed_count} new/updated files", icon="✅")
+    
+    return df
 
 # Load data first
 df = load_csv_files()
@@ -392,7 +394,7 @@ else:
     filtered_df = filtered_df.sort_values('date')
     
     # Tabs for different views
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Overview", "👥 Player Count", "📈 Resources", "⚔️ Power", "⚡ Speedups"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📊 Overview", "👥 Player Count", "📈 Resources", "⚔️ Power", "⚡ Speedups", "📦 Items"])
     
     with tab1:
         create_overview_tab(filtered_df)
@@ -506,6 +508,9 @@ else:
     
     with tab5:
         create_speedups_tab(filtered_df)
+    
+    with tab6:
+        create_items_tab(filtered_df)
     
     # Data table
     with st.expander("📋 Raw Data"):
