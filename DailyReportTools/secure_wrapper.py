@@ -78,7 +78,12 @@ def login_page():
     with st.form("login_form"):
         username = st.text_input("Username", key="login_username")
         password = st.text_input("Password", type="password", key="login_password")
-        submit_button = st.form_submit_button("Login")
+        
+        # Add some spacing
+        st.write("")
+        
+        # Use form_submit_button which already supports Enter key
+        submit_button = st.form_submit_button("Login", use_container_width=True)
         
         if submit_button:
             hashed_password = hashlib.sha256(password.encode()).hexdigest()
@@ -199,7 +204,7 @@ def load_csv_from_github():
                                 # Add filename info
                                 df['source_file'] = file_info['name']
                                 all_data.append(df)
-                                st.sidebar.success(f"✅ Loaded {file_info['name']}")
+                                # Removed sidebar message to reduce clutter
                             else:
                                 st.sidebar.warning(f"⚠️ Empty file: {file_info['name']}")
                         else:

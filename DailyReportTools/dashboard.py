@@ -7,7 +7,6 @@ import os
 from datetime import datetime
 import glob
 import requests
-import json
 from Tabs.speedups import create_speedups_tab
 from Tabs.resources import create_resources_tab
 from Tabs.overview import create_overview_tab
@@ -42,25 +41,50 @@ def calculate_daily_rate(values, dates):
     
     return daily_rates
 
+def save_parsed_cache(cache):
+    """Save cache of parsed files"""
+    cache_file = "parsed_files_cache.json"
+    try:
+        # Convert datetime objects to strings for JSON serialization
+        serializable_cache = {}
+        for filename, file_info in cache.items():
+            # Create a deep copy and convert datetime objects
+            data_copy = {}
+            for key, value in file_info['data'].items():
+                if isinstance(value, datetime):
+                    data_copy[key] = value.isoformat()
+                else:
+                    data_copy[key] = value
+            
+            serializable_cache[filename] = {
+                'data': data_copy,
+                'mtime': file_info['mtime']
+            }
+        
+        with open(cache_file, 'w') as f:
+            json.dump(serializable_cache, f)
+    except Exception as e:
+        st.warning(f"Could not save cache: {e}")
+
 def load_parsed_cache():
     """Load cache of previously parsed files"""
     cache_file = "parsed_files_cache.json"
     if os.path.exists(cache_file):
         try:
             with open(cache_file, 'r') as f:
-                return json.load(f)
-        except:
+                cache_data = json.load(f)
+            
+            # Convert datetime strings back to datetime objects
+            for filename, file_info in cache_data.items():
+                for key, value in file_info['data'].items():
+                    if key == 'date' and isinstance(value, str):
+                        file_info['data'][key] = datetime.fromisoformat(value)
+            
+            return cache_data
+        except Exception as e:
+            st.warning(f"Could not load cache: {e}")
             return {}
     return {}
-
-def save_parsed_cache(cache):
-    """Save cache of parsed files"""
-    cache_file = "parsed_files_cache.json"
-    try:
-        with open(cache_file, 'w') as f:
-            json.dump(cache, f)
-    except Exception as e:
-        st.warning(f"Could not save cache: {e}")
 
 def parse_single_file(file_path):
     """Parse a single CSV file and return the data"""
@@ -260,57 +284,44 @@ def sync_from_github():
 
 st.set_page_config(page_title="Realm Analytics Dashboard", layout="wide")
 
-@st.cache_data(ttl=300)  # Increased TTL to 5 minutes since we'll handle incremental updates
 def load_csv_files_incremental():
-    """Load and parse CSV files incrementally - only process new/updated files"""
+    """Load and parse CSV files - memory only (no file caching for security)"""
     csv_files = glob.glob("Daily Reports/*.csv")
     
     # Sort files by modification time (newest first)
     csv_files = sorted(csv_files, key=os.path.getmtime, reverse=True)
     
-    # Load cache of previously parsed files
-    parsed_cache = load_parsed_cache()
+    # Use session state for in-memory cache only (no file storage)
+    if 'parsed_files_memory_cache' not in st.session_state:
+        st.session_state.parsed_files_memory_cache = {}
     
-    # Track which files we need to parse
-    files_to_parse = []
-    new_cached_data = {}
+    memory_cache = st.session_state.parsed_files_memory_cache
+    new_parsed_count = 0
+    all_data = []
     
     for file_path in csv_files:
         file_mtime = os.path.getmtime(file_path)
         filename = os.path.basename(file_path)
         
-        # Check if file is in cache and hasn't been modified
-        if filename in parsed_cache and parsed_cache[filename]['mtime'] == file_mtime:
-            # Use cached data
-            new_cached_data[filename] = parsed_cache[filename]
+        # Check if file is in memory cache and hasn't been modified
+        if filename in memory_cache and memory_cache[filename]['mtime'] == file_mtime:
+            # Use cached data from memory
+            all_data.append(memory_cache[filename]['data'])
         else:
             # Need to parse this file
-            files_to_parse.append(file_path)
+            parsed_data = parse_single_file(file_path)
+            if parsed_data:
+                # Store in memory cache only (no file storage)
+                memory_cache[filename] = {
+                    'data': parsed_data,
+                    'mtime': file_mtime
+                }
+                all_data.append(parsed_data)
+                new_parsed_count += 1
     
-    # Parse only new/modified files
-    new_parsed_count = 0
-    for file_path in files_to_parse:
-        file_mtime = os.path.getmtime(file_path)
-        filename = os.path.basename(file_path)
-        
-        parsed_data = parse_single_file(file_path)
-        if parsed_data:
-            # Add to cache with modification time
-            new_cached_data[filename] = {
-                'data': parsed_data,
-                'mtime': file_mtime
-            }
-            new_parsed_count += 1
-    
-    # Save updated cache
+    # Show toast for new files (but no file caching)
     if new_parsed_count > 0:
-        save_parsed_cache(new_cached_data)
-        st.info(f"📊 Processed {new_parsed_count} new/updated files")
-    
-    # Extract all data from cache
-    all_data = []
-    for filename, file_info in new_cached_data.items():
-        all_data.append(file_info['data'])
+        st.toast(f"📊 Processed {new_parsed_count} new/updated files", icon="✅")
     
     # Sort by date
     all_data.sort(key=lambda x: x['date'])
@@ -342,6 +353,18 @@ if df.empty:
 else:
     # Sidebar filters
     st.sidebar.header("Filters")
+    
+    # Latest report info
+    if not df.empty:
+        latest_report = df.iloc[-1]
+        latest_date = latest_report['date']
+        latest_date_str = latest_date.strftime("%Y-%m-%d %H:%M:%S")
+        realm_name = latest_report.get('realm_name', 'Unknown')
+        
+        st.sidebar.markdown("### 📊 Latest Report")
+        st.sidebar.markdown(f"**Date:** {latest_date_str}")
+        st.sidebar.markdown(f"**Realm:** {realm_name}")
+        st.sidebar.markdown(f"**Total Reports:** {len(df)}")
     
     # Date range filter
     df['date'] = pd.to_datetime(df['date'])
@@ -530,11 +553,16 @@ st.sidebar.markdown("""
 # Add cache clear button at bottom
 st.sidebar.markdown("---")
 if st.sidebar.button("🔄 Re-sync Database"):
-    # Clear the parsed files cache to force fresh parsing
+    # Clear the memory cache (no file cache for security)
+    if 'parsed_files_memory_cache' in st.session_state:
+        st.session_state.parsed_files_memory_cache = {}
+        st.info("🗑️ Cleared memory cache")
+    
+    # Remove any existing cache file for security
     cache_file = "parsed_files_cache.json"
     if os.path.exists(cache_file):
         os.remove(cache_file)
-        st.info("🗑️ Cleared parsing cache")
+        st.info("🗑️ Removed old cache file")
     
     # Sync from GitHub first
     sync_success = sync_from_github()

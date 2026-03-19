@@ -152,7 +152,7 @@ def load_csv_from_github():
                         # Add filename info
                         df['source_file'] = file_info['name']
                         all_data.append(df)
-                        st.success(f"✅ Loaded {file_info['name']}")
+                        # Removed success message to reduce sidebar clutter
                 else:
                     st.error(f"❌ Failed to load {file_info['name']}")
             
