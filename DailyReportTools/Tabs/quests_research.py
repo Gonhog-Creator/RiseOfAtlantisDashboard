@@ -27,7 +27,7 @@ def create_quests_research_tab(filtered_df):
                 available_columns = [col for col in quest_columns if col in player_df.columns]
             
             if available_columns:
-                    st.markdown("#### \ud83d\udcca Quest & Research Overview")
+                    st.markdown("#### Quest & Research Overview")
                     
                     # Calculate overall statistics
                     total_players = len(player_df)
@@ -47,7 +47,7 @@ def create_quests_research_tab(filtered_df):
                         
                         with col1:
                             st.metric(
-                                "\u2705 Completed Quests",
+                                "Completed Quests",
                                 f"{stats['completed_quests_count']['total']:,}",
                                 f"{stats['completed_quests_count']['average']:.1f} avg"
                             )
@@ -55,14 +55,14 @@ def create_quests_research_tab(filtered_df):
                         with col2:
                             completion_rate = (stats['completed_quests_count']['players_with_progress'] / total_players * 100) if total_players > 0 else 0
                             st.metric(
-                                "\ud83d\udc65 Players with Quests",
+                                "Players with Quests",
                                 f"{stats['completed_quests_count']['players_with_progress']:,}",
                                 f"{completion_rate:.1f}%"
                             )
                         
                         with col3:
                             st.metric(
-                                "\ud83c\udfc6 Most Quests",
+                                "Most Quests",
                                 f"{stats['completed_quests_count']['max']:,}",
                                 "Single player"
                             )
@@ -72,7 +72,7 @@ def create_quests_research_tab(filtered_df):
                         
                         with col4:
                             st.metric(
-                                "\ud83d\udd2c Completed Research",
+                                "Completed Research",
                                 f"{stats['completed_research_count']['total']:,}",
                                 f"{stats['completed_research_count']['average']:.1f} avg"
                             )
@@ -80,14 +80,14 @@ def create_quests_research_tab(filtered_df):
                         with col5:
                             research_rate = (stats['completed_research_count']['players_with_progress'] / total_players * 100) if total_players > 0 else 0
                             st.metric(
-                                "\ud83d\udc65 Players with Research",
+                                "Players with Research",
                                 f"{stats['completed_research_count']['players_with_progress']:,}",
                                 f"{research_rate:.1f}%"
                             )
                         
                         with col6:
                             st.metric(
-                                "\ud83d\udd2c Most Research",
+                                "Most Research",
                                 f"{stats['completed_research_count']['max']:,}",
                                 "Single player"
                             )
@@ -97,7 +97,7 @@ def create_quests_research_tab(filtered_df):
                         
                         with col7:
                             st.metric(
-                                "\u23f3 In Progress Quests",
+                                "In Progress Quests",
                                 f"{stats['in_progress_quests_count']['total']:,}",
                                 f"{stats['in_progress_quests_count']['average']:.1f} avg"
                             )
@@ -105,13 +105,13 @@ def create_quests_research_tab(filtered_df):
                         with col8:
                             progress_rate = (stats['in_progress_quests_count']['players_with_progress'] / total_players * 100) if total_players > 0 else 0
                             st.metric(
-                                "\ud83d\udc65 Active Questers",
+                                "Active Questers",
                                 f"{stats['in_progress_quests_count']['players_with_progress']:,}",
                                 f"{progress_rate:.1f}%"
                             )
                     
                     # Distribution charts
-                    st.markdown("#### \ud83d\udcc8 Quest & Research Distributions")
+                    st.markdown("#### Quest & Research Distributions")
                     
                     # Create distribution charts
                     chart_cols = st.columns(len(available_columns))
@@ -130,7 +130,7 @@ def create_quests_research_tab(filtered_df):
                             st.plotly_chart(fig, use_container_width=True)
                 
                 # Player progress analysis
-                    st.markdown("#### \ud83d\udc65 Player Progress Analysis")
+                    st.markdown("#### Player Progress Analysis")
                     
                     # Create combined progress dataframe
                     progress_data = []
@@ -151,15 +151,19 @@ def create_quests_research_tab(filtered_df):
                     if not progress_df.empty:
                         # Sort by total progress
                         if 'completed_quests_count' in available_columns and 'completed_research_count' in available_columns:
-                            progress_df['Total Progress'] = progress_df['Completed Quests'] + progress_df['Completed Research']
-                            progress_df = progress_df.sort_values('Total Progress', ascending=False)
+                            # Check if the expected columns exist
+                            quests_col = 'CompletedQuests'
+                            research_col = 'CompletedResearch'
+                            if quests_col in progress_df.columns and research_col in progress_df.columns:
+                                progress_df['Total Progress'] = progress_df[quests_col] + progress_df[research_col]
+                                progress_df = progress_df.sort_values('Total Progress', ascending=False)
                         
                         # Display top players
                         st.dataframe(progress_df.head(20), use_container_width=True)
                     
                     # Detailed quest analysis (if quest details are available)
                     if 'quest_details' in player_df.columns:
-                        st.markdown("#### \ud83d\udd0d Detailed Quest Analysis")
+                        st.markdown("#### Detailed Quest Analysis")
                         
                         # Process quest details
                         all_quests = []
@@ -304,7 +308,7 @@ def create_quests_research_tab(filtered_df):
                     
                     # Progress correlation with power
                     if 'power' in player_df.columns and ('completed_quests_count' in available_columns or 'completed_research_count' in available_columns):
-                        st.markdown("#### \ud83d\udcc8 Progress vs Power Correlation")
+                        st.markdown("#### Progress vs Power Correlation")
                         
                         # Create scatter plots
                         if 'completed_quests_count' in available_columns:

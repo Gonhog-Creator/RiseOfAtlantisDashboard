@@ -16,6 +16,7 @@ from Tabs.troops import create_troops_tab
 from Tabs.buildings import create_buildings_tab
 from Tabs.skins import create_skins_tab
 from Tabs.quests_research import create_quests_research_tab
+from Tabs.ceasefire import create_ceasefire_tab
 
 def calculate_daily_rate(values, dates):
     """Calculate true daily rate based on time differences between reports"""
@@ -99,13 +100,20 @@ def parse_comprehensive_csv(file_path):
         
         # Try to extract date from filename
         if "comprehensive_player_data" in filename:
-            # Look for date pattern in filename
+            # Look for date pattern in filename - format: comprehensive_player_data_YYYY-MM-DD_HHMMSS.csv
             import re
-            date_match = re.search(r'(\d{4}-\d{2}-\d{2})', filename)
+            date_match = re.search(r'(\d{4}-\d{2}-\d{2})_(\d{6})', filename)
             if date_match:
-                date_str = date_match.group(1)
-                # Use current time for time component since it's not in filename
-                date = datetime.strptime(date_str, "%Y-%m-%d")
+                date_part = date_match.group(1)
+                time_part = date_match.group(2)
+                # Convert HHMMSS to HH:MM:SS format
+                if len(time_part) == 6:
+                    formatted_time = f"{time_part[:2]}:{time_part[2:4]}:{time_part[4:]}"
+                    date_str = date_part + "_" + formatted_time
+                    date = datetime.strptime(date_str, "%Y-%m-%d_%H:%M:%S")
+                else:
+                    # Fallback to file modification time
+                    date = datetime.fromtimestamp(os.path.getmtime(file_path))
             else:
                 # Fallback to file modification time
                 date = datetime.fromtimestamp(os.path.getmtime(file_path))
@@ -135,13 +143,15 @@ def parse_comprehensive_csv(file_path):
             if total_amount > 0:
                 items[item_name] = total_amount
         
-        # Aggregate resources (if resource columns exist)
+        # Aggregate resources (comprehensive format uses resource_ prefix)
         resources = {}
-        resource_columns = ['gold', 'lumber', 'stone', 'metal', 'food', 'ruby']
-        for col in resource_columns:
+        resource_columns = ['resource_gold', 'resource_lumber', 'resource_stone', 'resource_metal', 'resource_food', 'resource_ruby']
+        resource_names = ['gold', 'lumber', 'stone', 'metal', 'food', 'ruby']
+        
+        for col, name in zip(resource_columns, resource_names):
             if col in df.columns:
                 total_amount = df[col].fillna(0).sum()
-                resources[col] = total_amount
+                resources[name] = total_amount
         
         # Extract additional data for new tabs
         buildings_data = {}
@@ -183,6 +193,33 @@ def parse_comprehensive_csv(file_path):
             'in_progress_quests': df['in_progress_quests_count'].fillna(0).sum()
         }
         
+        # Calculate ceasefire protection data - always initialize as empty dict
+        ceasefire_data = {}
+        
+        # Only calculate ceasefire data for comprehensive CSV files with required columns
+        if 'active_effects' in df.columns and 'resource_gold' in df.columns:
+            # Check for ceasefire effects (prevent_attacks)
+            ceasefire_effects = ['server:prevent_attacks:1', 'armistice_agreement:prevent_attacks:1']
+            df['has_ceasefire'] = df['active_effects'].fillna('').astype(str).apply(
+                lambda x: any(effect in x for effect in ceasefire_effects)
+            )
+            
+            # Calculate protected resources for each resource type
+            resource_columns = ['resource_gold', 'resource_lumber', 'resource_stone', 'resource_metal', 'resource_food', 'resource_ruby']
+            resource_names = ['gold', 'lumber', 'stone', 'metal', 'food', 'ruby']
+            
+            for col, name in zip(resource_columns, resource_names):
+                if col in df.columns:
+                    total_amount = df[col].fillna(0).sum()
+                    protected_amount = df[df['has_ceasefire']][col].fillna(0).sum()
+                    protected_percentage = (protected_amount / total_amount * 100) if total_amount > 0 else 0
+                    
+                    ceasefire_data[name] = {
+                        'total': total_amount,
+                        'protected': protected_amount,
+                        'protected_percentage': protected_percentage
+                    }
+        
         realm_data = {
             'date': date,
             'filename': filename,
@@ -195,6 +232,7 @@ def parse_comprehensive_csv(file_path):
             'troops_data': troops_data,
             'skins_data': skins_data,
             'quests_data': quests_data,
+            'ceasefire_data': ceasefire_data,
             'raw_player_data': df  # Store raw data for detailed tabs
         }
         
@@ -287,6 +325,9 @@ def parse_single_file(file_path):
                             except ValueError:
                                 continue
                 realm_data['items'] = items
+        
+        # Add empty ceasefire_data for old CSV files
+        realm_data['ceasefire_data'] = {}
         
         return realm_data
         
@@ -450,14 +491,14 @@ def load_csv_files_incremental():
     for data in all_data:
         row = {}
         for key, value in data.items():
-            if key not in ['raw_player_data', 'resources', 'items', 'buildings_data', 'troops_data', 'skins_data', 'quests_data']:
+            if key not in ['raw_player_data', 'resources', 'items', 'buildings_data', 'troops_data', 'skins_data', 'quests_data', 'ceasefire_data']:
                 row[key] = value
         simple_data.append(row)
     
     df = pd.DataFrame(simple_data)
     
     # Now add complex objects as separate columns with object dtype
-    complex_columns = ['raw_player_data', 'resources', 'items', 'buildings_data', 'troops_data', 'skins_data', 'quests_data']
+    complex_columns = ['raw_player_data', 'resources', 'items', 'buildings_data', 'troops_data', 'skins_data', 'quests_data', 'ceasefire_data']
     
     for col in complex_columns:
         df[col] = None  # Initialize with None
@@ -540,7 +581,7 @@ else:
     filtered_df = filtered_df.sort_values('date')
     
     # Tabs for different views
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs(["Overview", "Player Count", "Resources", "Power", "Speedups", "Items", "Troops", "Buildings", "Skins", "Quests & Research"])
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = st.tabs(["Overview", "Player Count", "Resources", "Power", "Speedups", "Items", "Troops", "Buildings", "Skins", "Quests & Research", "Ceasefire"])
     
     with tab1:
         create_overview_tab(filtered_df)
@@ -669,6 +710,9 @@ else:
     
     with tab10:
         create_quests_research_tab(filtered_df)
+    
+    with tab11:
+        create_ceasefire_tab(filtered_df)
     
     # Data table
     with st.expander("📋 Raw Data"):

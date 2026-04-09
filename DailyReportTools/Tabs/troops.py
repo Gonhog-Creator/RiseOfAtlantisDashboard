@@ -85,7 +85,14 @@ def create_troops_tab(filtered_df):
                 if len(troops_data) > 1:
                     st.markdown("#### Trends Troop Distribution")
                     
+                    # Create DataFrame and ensure Count column is numeric
                     troop_df = pd.DataFrame(list(troops_data.items()), columns=['Troop Type', 'Count'])
+                    # Convert Count column to numeric, coercing errors to NaN
+                    troop_df['Count'] = pd.to_numeric(troop_df['Count'], errors='coerce')
+                    # Drop rows with NaN in Count column
+                    troop_df = troop_df.dropna(subset=['Count'])
+                    # Convert to integer
+                    troop_df['Count'] = troop_df['Count'].astype(int)
                     troop_df = troop_df.sort_values('Count', ascending=True)
                     
                     fig_troops = px.bar(
@@ -118,6 +125,11 @@ def create_troops_tab(filtered_df):
                     troop_columns = [col for col in player_df.columns if 'troop' in col.lower()]
                     
                     if troop_columns:
+                        # Convert all troop columns to numeric, coercing errors to NaN
+                        for col in troop_columns:
+                            player_df[col] = pd.to_numeric(player_df[col], errors='coerce')
+                        
+                        # Fill NaN with 0 and sum
                         player_df['total_troops'] = player_df[troop_columns].fillna(0).sum(axis=1)
                         
                         # Get top 5 players
@@ -126,15 +138,27 @@ def create_troops_tab(filtered_df):
                         if not top_players.empty:
                             # Display top players
                             for i, (_, player) in enumerate(top_players.iterrows(), 1):
-                                account_id = player['account_id'][:8] + "..." if len(player['account_id']) > 8 else player['account_id']
-                                total_troops = int(player['total_troops'])
+                                account_id = str(player['account_id'])[:8] + "..." if len(str(player['account_id'])) > 8 else str(player['account_id'])
+                                # Extract scalar value safely
+                                total_troops_val = player['total_troops']
+                                if isinstance(total_troops_val, (pd.Series, list, tuple)):
+                                    # Take the first value if it's a Series or array
+                                    total_troops = int(total_troops_val.iloc[0] if isinstance(total_troops_val, pd.Series) else total_troops_val[0])
+                                else:
+                                    total_troops = int(total_troops_val)
                                 
                                 with st.expander(f"#{i} {account_id} - {total_troops:,} troops", expanded=i==1):
                                     # Show troop breakdown
                                     troop_breakdown = {}
                                     for col in troop_columns:
-                                        if pd.notna(player[col]) and player[col] > 0:
-                                            troop_breakdown[col] = int(player[col])
+                                        col_value = player[col]
+                                        # Extract scalar value safely
+                                        if isinstance(col_value, (pd.Series, list, tuple)):
+                                            # Take the first value if it's a Series or array
+                                            col_value = col_value.iloc[0] if isinstance(col_value, pd.Series) else col_value[0]
+                                        
+                                        if pd.notna(col_value) and col_value > 0:
+                                            troop_breakdown[col] = int(col_value)
                                     
                                     if troop_breakdown:
                                         breakdown_df = pd.DataFrame(list(troop_breakdown.items()), columns=['Troop Type', 'Count'])

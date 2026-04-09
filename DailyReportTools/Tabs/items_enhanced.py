@@ -140,7 +140,7 @@ def create_items_tab(df):
     # Check if we have comprehensive data
     latest_data = df.iloc[-1]
     
-    if 'raw_player_data' in latest_data:
+    if 'raw_player_data' in latest_data and latest_data['raw_player_data'] is not None:
         # Comprehensive CSV format
         player_df = latest_data['raw_player_data']
         
@@ -345,12 +345,12 @@ def create_items_tab(df):
                 
                 for _, row in df.iterrows():
                     date = row['date']
-                    if 'raw_player_data' in row:
+                    if 'raw_player_data' in row and row['raw_player_data'] is not None:
                         player_data = row['raw_player_data']
                         
                         for item_name, _ in top_5_items:
                             item_col = f'item_{item_name}'
-                            if item_col in player_data.columns:
+                            if player_data is not None and item_col in player_data.columns:
                                 count = player_data[item_col].fillna(0).sum()
                                 trend_data.append({
                                     'Date': date,

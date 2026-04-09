@@ -69,7 +69,8 @@ class PlayerDataAnalyzer:
             'quest.csv',
             'alliance_member.csv',
             'alliance.csv',
-            'user.csv'
+            'user.csv',
+            'effect.csv'
         ]
         
         for csv_file in csv_files:
@@ -216,6 +217,9 @@ class PlayerDataAnalyzer:
         # Process alliance data
         alliance_members = self.group_by_field(data.get('alliance_member', []), 'player_id')
         alliances = {alliance['uuid']: alliance for alliance in data.get('alliance', [])}
+        
+        # Process effects
+        effects_by_player = self.group_by_field(data.get('effect', []), 'player_id')
         
         # Combine all data for each player
         comprehensive_data = []
@@ -413,6 +417,36 @@ class PlayerDataAnalyzer:
             else:
                 player_data['alliance_name'] = ''
                 player_data['alliance_tag'] = ''
+            
+            # Process effects
+            effects = effects_by_player.get(player_id, [])
+            active_effects = []
+            permanent_effects = []
+            effect_types = set()
+            total_effects = len(effects)
+            
+            for effect in effects:
+                effect_source = effect.get('source', '')
+                effect_type = effect.get('type', '')
+                effect_level = effect.get('level', '')
+                effect_is_permanent = effect.get('is_permanent', '')
+                effect_start_at = effect.get('start_at', '')
+                effect_duration = effect.get('duration', '')
+                
+                effect_types.add(effect_type)
+                
+                effect_info = f"{effect_source}:{effect_type}:{effect_level}"
+                if effect_is_permanent == 't':
+                    permanent_effects.append(effect_info)
+                else:
+                    active_effects.append(effect_info)
+            
+            player_data['total_effects'] = total_effects
+            player_data['active_effects'] = '|'.join(active_effects) if active_effects else ''
+            player_data['permanent_effects'] = '|'.join(permanent_effects) if permanent_effects else ''
+            player_data['effect_types'] = '|'.join(sorted(effect_types)) if effect_types else ''
+            player_data['active_effects_count'] = len(active_effects)
+            player_data['permanent_effects_count'] = len(permanent_effects)
             
             comprehensive_data.append(player_data)
         

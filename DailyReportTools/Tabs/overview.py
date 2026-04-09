@@ -133,6 +133,10 @@ def create_overview_tab(filtered_df):
                     
                     # Create 2x3 grid for resource metrics
                     for i in range(0, len(display_resources), 3):
+                        # Add spacing between rows (except for the first row)
+                        if i > 0:
+                            st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
+                        
                         cols = st.columns(3)
                         for j, resource in enumerate(display_resources[i:i+3]):
                             with cols[j]:
@@ -152,8 +156,25 @@ def create_overview_tab(filtered_df):
                                         format_number(latest_amount, show_full_numbers),
                                         format_rate(daily_rate, show_full_numbers)
                                     )
-                                    # Add per player amount below metric in a grey bubble
-                                    st.markdown(f"<div style='text-align: left; margin-top: -10px;'><span style='background-color: #666; color: white; padding: 2px 8px; border-radius: 12px; font-size: 14px;'>{format_number(avg_per_player, show_full_numbers)}/player</span></div>", unsafe_allow_html=True)
+                                    
+                                    # Get ceasefire protection data for this resource
+                                    protected_amount = 0
+                                    protected_percentage = 0
+                                    latest_data = sorted_filtered.iloc[-1]
+                                    
+                                    # Get ceasefire protection data if available
+                                    if 'ceasefire_data' in latest_data and isinstance(latest_data['ceasefire_data'], dict):
+                                        ceasefire_info = latest_data['ceasefire_data'].get(resource, {})
+                                        protected_amount = ceasefire_info.get('protected', 0)
+                                        protected_percentage = ceasefire_info.get('protected_percentage', 0)
+                                    
+                                    # Add per player amount and ceasefire protection info below metric
+                                    # Per player badge
+                                    st.markdown(f"<div style='text-align: left; margin-top: -10px; margin-bottom: 2px;'><span style='background-color: #666; color: white; padding: 2px 8px; border-radius: 12px; font-size: 14px;'>{format_number(avg_per_player, show_full_numbers)}/player</span></div>", unsafe_allow_html=True)
+                                    
+                                    # Protected badge below (only if protection exists and not ruby)
+                                    if protected_amount > 0 and resource != 'ruby':
+                                        st.markdown(f"<div style='text-align: left; margin-top: 0px;'><span style='background-color: #87CEEB; color: #333; padding: 2px 8px; border-radius: 12px; font-size: 14px;'>{format_number(protected_amount, show_full_numbers)} protected ({protected_percentage:.1f}%)</span></div>", unsafe_allow_html=True)
             
             with col2:
                 st.markdown("### 👥 Player Stats")

@@ -10,3 +10,7 @@
 *.xlsx
 *.csv
 *.xml
+*.gz
+*.bak
+*.txt
+*backup

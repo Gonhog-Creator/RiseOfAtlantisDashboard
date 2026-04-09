@@ -126,9 +126,7 @@ def rebuild_yaml_structure(df):
                     if items:
                         level_data['items'] = CommentedMap(items)
                 
-                # Only add level data if it's not empty
-                if level_data:  # This checks if the CommentedMap has any content
-                    requirements[settlement_type][level] = level_data
+                requirements[settlement_type][level] = level_data
         
         if requirements:
             building_data['requirements'] = requirements

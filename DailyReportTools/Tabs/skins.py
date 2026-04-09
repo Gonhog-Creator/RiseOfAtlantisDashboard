@@ -203,7 +203,7 @@ def create_skins_tab(filtered_df):
                             st.dataframe(rarity_summary, use_container_width=True)
                         
                         # Detailed skin analysis
-                        st.markdown("#### \ud83d\udd0d Detailed Skin Analysis")
+                        st.markdown("#### Detailed Skin Analysis")
                         
                         selected_skin = st.selectbox(
                             "Select a skin for detailed analysis:",
@@ -238,7 +238,7 @@ def create_skins_tab(filtered_df):
                                         continue
                             
                             if skin_players:
-                                st.markdown(f"##### \ud83d\udc65 Players with {selected_skin}")
+                                st.markdown(f"##### Players with {selected_skin}")
                                 
                                 skin_df = pd.DataFrame(skin_players)
                                 skin_df = skin_df.sort_values('Power', ascending=False)
