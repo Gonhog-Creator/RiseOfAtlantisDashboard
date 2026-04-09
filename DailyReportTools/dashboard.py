@@ -49,26 +49,7 @@ def calculate_daily_rate(values, dates):
 
 def get_realm_name(realm_id):
     """Convert realm ID to realm name"""
-    realm_mapping = {
-        # Add realm ID to name mappings here
-        # Current realm (actual UUID from CSV)
-        'ad5fb84b-1cb6-46ec-bc45-58dd610e6d22': 'Ruby',
-        # Legacy mappings for compatibility
-        '1': 'Ruby',
-        'ruby': 'Ruby',
-        'Ruby': 'Ruby',
-        # Add more realms as needed
-        # '2': 'Emerald',
-        # '3': 'Diamond',
-        # '4': 'Sapphire',
-    }
-    
-    # Handle both numeric and string realm IDs
-    if str(realm_id).lower() in realm_mapping:
-        return realm_mapping[str(realm_id).lower()]
-    else:
-        # Return the ID as-is if not mapped
-        return str(realm_id)
+    return 'Ruby'
 
 def process_player_creation_dates(filtered_df):
     """Process player creation dates to generate accurate player count over time"""
@@ -639,13 +620,14 @@ with col1:
 with col2:
     if not df.empty:
         latest_row = df.iloc[-1]
-        # Handle different realm name fields
-        if 'realm_name' in latest_row:
+        
+        # Handle different realm name fields - default to Ruby if nan or missing
+        realm_name = 'Ruby'
+        if 'realm_name' in latest_row and pd.notna(latest_row['realm_name']):
             realm_name = latest_row['realm_name']
-        elif 'realm_id' in latest_row:
+        elif 'realm_id' in latest_row and pd.notna(latest_row['realm_id']):
             realm_name = get_realm_name(latest_row['realm_id'])
-        else:
-            realm_name = 'Unknown Realm'
+        
         st.markdown(f"**Realm:** {realm_name}")
 
 if df.empty:
@@ -657,18 +639,32 @@ else:
     # Latest report info
     if not df.empty:
         latest_report = df.iloc[-1]
-        latest_date = latest_report['date']
-        latest_date_str = latest_date.strftime("%Y-%m-%d %H:%M:%S")
-        # Handle different realm name fields
-        if 'realm_name' in latest_report:
-            realm_name = latest_report['realm_name']
-        elif 'realm_id' in latest_report:
-            realm_name = get_realm_name(latest_report['realm_id'])
+        
+        # Database update time from CSV data
+        database_date = latest_report['date']
+        database_date_str = database_date.strftime("%Y-%m-%d %I:%M %p")
+        
+        # Dashboard update time from file modification time
+        csv_files = glob.glob("Daily Reports/*.csv")
+        csv_files = sorted(csv_files, key=os.path.getmtime, reverse=True)
+        if csv_files:
+            latest_file = csv_files[0]
+            latest_mtime = os.path.getmtime(latest_file)
+            dashboard_date = datetime.fromtimestamp(latest_mtime)
+            dashboard_date_str = dashboard_date.strftime("%Y-%m-%d %I:%M %p")
         else:
-            realm_name = 'Unknown Realm'
+            dashboard_date_str = "Unknown"
+        
+        # Handle different realm name fields - default to Ruby if nan or missing
+        realm_name = 'Ruby'
+        if 'realm_name' in latest_report and pd.notna(latest_report['realm_name']):
+            realm_name = latest_report['realm_name']
+        elif 'realm_id' in latest_report and pd.notna(latest_report['realm_id']):
+            realm_name = get_realm_name(latest_report['realm_id'])
         
         st.sidebar.markdown("### 📊 Latest Report")
-        st.sidebar.markdown(f"**Date:** {latest_date_str}")
+        st.sidebar.markdown(f"**Database Update:** {database_date_str}")
+        st.sidebar.markdown(f"**Dashboard Update:** {dashboard_date_str}")
         st.sidebar.markdown(f"**Realm:** {realm_name}")
         st.sidebar.markdown(f"**Total Reports:** {len(df)}")
     
@@ -939,15 +935,6 @@ else:
         formatted_df['AvgPowerPerPlayer'] = formatted_df['AvgPowerPerPlayer'].apply(lambda x: f"{int(x):,}" if pd.notna(x) else "0")
         
         st.dataframe(formatted_df, width='stretch')
-
-# Instructions
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 📁 Setup Instructions")
-st.sidebar.markdown("""
-1. Place CSV files in the `Daily Reports` folder
-2. Run: `streamlit run dashboard.py`
-3. Open the provided URL in your browser
-""")
 
 # Add cache clear button at bottom
 st.sidebar.markdown("---")
