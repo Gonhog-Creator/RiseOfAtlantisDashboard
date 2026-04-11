@@ -16,28 +16,25 @@ from datetime import datetime
 class PlayerDataAnalyzer:
     def __init__(self, database_path):
         self.database_path = database_path
-        self.tar_file = os.path.join(database_path, "csv-exports_backup_2026-04-08_14-00-01_csv.tar.gz")
+        # Find all .tar.gz files in the directory
+        self.tar_files = sorted([
+            os.path.join(database_path, f) 
+            for f in os.listdir(database_path) 
+            if f.endswith('.tar.gz')
+        ])
+        
+        if not self.tar_files:
+            raise FileNotFoundError(f"No .tar.gz files found in {database_path}")
+        
+        print(f"Found {len(self.tar_files)} .tar.gz file(s) to process")
+        
         self.extract_path = os.path.join(database_path, "extracted_data")
-        
-        # Extract date from tar file name instead of using current datetime
-        tar_filename = os.path.basename(self.tar_file)
-        # Extract date from format: csv-exports_backup_YYYY-MM-DD_HH-MM-SS_csv.tar.gz
-        date_match = tar_filename.split('backup_')[1].split('_csv.tar.gz')[0] if 'backup_' in tar_filename else datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        # Convert from YYYY-MM-DD_HH-MM-SS to YYYY-MM-DD_HHMMSS format
-        # date_match format: "2026-04-08_14-00-01"
-        # desired format: "2026-04-08_140001"
-        date_parts = date_match.split('_')  # ["2026-04-08", "14-00-01"]
-        date_part = date_parts[0]  # "2026-04-08"
-        time_part = date_parts[1].replace('-', '')  # "140001"
-        date_formatted = f"{date_part}_{time_part}"  # "2026-04-08_140001"
-        
-        self.output_file = os.path.join(database_path, f"comprehensive_player_data_{date_formatted}.csv")
         self.item_types_file = os.path.join(database_path, "item_types_registry.json")
         self.troop_types_file = os.path.join(database_path, "troop_types_registry.json")
         
-    def extract_tar_file(self):
+    def extract_tar_file(self, tar_file):
         """Extract the tar file to extract_path"""
-        print(f"Extracting {self.tar_file}...")
+        print(f"Extracting {tar_file}...")
         
         if os.path.exists(self.extract_path):
             import shutil
@@ -45,7 +42,7 @@ class PlayerDataAnalyzer:
         
         os.makedirs(self.extract_path, exist_ok=True)
         
-        with tarfile.open(self.tar_file, 'r:gz') as tar:
+        with tarfile.open(tar_file, 'r:gz') as tar:
             tar.extractall(path=self.extract_path)
         
         print(f"Extracted to {self.extract_path}")
@@ -486,9 +483,9 @@ class PlayerDataAnalyzer:
         print(f"CSV written to {filename} with {len(data)} rows and {len(fieldnames)} columns")
         return fieldnames
     
-    def generate_summary(self, data, fieldnames):
+    def generate_summary(self, data, fieldnames, output_file):
         """Generate summary statistics"""
-        summary_file = self.output_file.replace('.csv', '_summary.txt')
+        summary_file = output_file.replace('.csv', '_summary.txt')
         with open(summary_file, 'w') as f:
             f.write("=== PLAYER DATA ANALYSIS SUMMARY ===\n")
             f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
@@ -510,39 +507,63 @@ class PlayerDataAnalyzer:
         
         print(f"Summary saved to {summary_file}")
     
+    def get_output_filename(self, tar_file):
+        """Generate output filename based on tar file name"""
+        tar_filename = os.path.basename(tar_file)
+        # Extract date from format: csv-exports_backup_YYYY-MM-DD_HH-MM-SS_csv.tar.gz
+        date_match = tar_filename.split('backup_')[1].split('_csv.tar.gz')[0] if 'backup_' in tar_filename else datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        # Convert from YYYY-MM-DD_HH-MM-SS to YYYY-MM-DD_HHMMSS format
+        date_parts = date_match.split('_')
+        date_part = date_parts[0]
+        time_part = date_parts[1].replace('-', '')
+        date_formatted = f"{date_part}_{time_part}"
+        
+        return os.path.join(self.database_path, f"comprehensive_player_data_{date_formatted}.csv")
+
     def generate_comprehensive_csv(self):
-        """Main function to generate the comprehensive CSV"""
+        """Main function to generate the comprehensive CSV for all tar files"""
         print("Starting comprehensive player data analysis...")
         
-        try:
-            # Extract tar file
-            self.extract_tar_file()
+        for tar_file in self.tar_files:
+            print(f"\n{'='*60}")
+            print(f"Processing: {os.path.basename(tar_file)}")
+            print(f"{'='*60}")
             
-            # Load CSV data
-            data = self.load_csv_data()
+            output_file = self.get_output_filename(tar_file)
             
-            # Process and consolidate data
-            comprehensive_data, item_registry, troop_registry = self.process_player_data(data)
-            
-            if not comprehensive_data:
-                print("No data to process!")
-                return
-            
-            # Save to CSV
-            fieldnames = self.write_csv(comprehensive_data, self.output_file)
-            
-            # Generate summary
-            self.generate_summary(comprehensive_data, fieldnames)
-            
-            print(f"Analysis complete! Output saved to {self.output_file}")
-            print(f"Total players processed: {len(comprehensive_data)}")
-            print(f"Total data points: {len(fieldnames)}")
-            print(f"Item types registered: {len(item_registry)}")
-            print(f"Troop types registered: {len(troop_registry)}")
-            
-        finally:
-            # Always clean up extracted files
-            self.cleanup_extracted_files()
+            try:
+                # Extract tar file
+                self.extract_tar_file(tar_file)
+                
+                # Load CSV data
+                data = self.load_csv_data()
+                
+                # Process and consolidate data
+                comprehensive_data, item_registry, troop_registry = self.process_player_data(data)
+                
+                if not comprehensive_data:
+                    print("No data to process!")
+                    continue
+                
+                # Save to CSV
+                fieldnames = self.write_csv(comprehensive_data, output_file)
+                
+                # Generate summary
+                self.generate_summary(comprehensive_data, fieldnames, output_file)
+                
+                print(f"Analysis complete! Output saved to {output_file}")
+                print(f"Total players processed: {len(comprehensive_data)}")
+                print(f"Total data points: {len(fieldnames)}")
+                print(f"Item types registered: {len(item_registry)}")
+                print(f"Troop types registered: {len(troop_registry)}")
+                
+            finally:
+                # Always clean up extracted files
+                self.cleanup_extracted_files()
+        
+        print(f"\n{'='*60}")
+        print(f"Processed {len(self.tar_files)} tar file(s)")
+        print(f"{'='*60}")
 
 if __name__ == "__main__":
     # Get the directory where this script is located

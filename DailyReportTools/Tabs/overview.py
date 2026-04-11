@@ -34,6 +34,10 @@ def calculate_daily_rate(sorted_df, value_column):
 
 def format_number(num, show_full=False):
     """Format numbers with optional full display - keeps original styling"""
+    # Handle NaN values
+    if pd.isna(num):
+        return "N/A"
+    
     if show_full:
         # Full numbers with original st.metric styling
         return f"{int(num):,}"
@@ -50,6 +54,10 @@ def format_number(num, show_full=False):
 
 def format_rate(rate, show_full=False):
     """Format daily growth rates with optional full display - keeps original styling"""
+    # Handle NaN values
+    if pd.isna(rate):
+        return "N/A/day"
+    
     if show_full:
         # Full rates with original st.metric styling
         return f"{int(rate):+,}/day"
