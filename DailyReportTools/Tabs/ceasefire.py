@@ -98,7 +98,7 @@ def create_ceasefire_tab(filtered_df):
         st.markdown("#### Players with Attack Prevention")
         
         # Prepare player data for display
-        display_columns = ['username', 'power']
+        display_columns = ['username', 'power', 'resource_gold', 'resource_lumber', 'resource_stone', 'resource_metal', 'resource_food']
         available_columns = [col for col in display_columns if col in protected_players.columns]
         
         if available_columns:
@@ -110,14 +110,23 @@ def create_ceasefire_tab(filtered_df):
             # Rename columns for better display
             column_rename_map = {
                 'username': 'Player Name',
-                'power': 'Power'
+                'power': 'Power',
+                'resource_gold': 'Gold',
+                'resource_lumber': 'Lumber',
+                'resource_stone': 'Stone',
+                'resource_metal': 'Metal',
+                'resource_food': 'Food'
             }
             
             player_table = player_table.rename(columns=column_rename_map)
             
-            # Format power column
+            # Format power and resource columns
             if 'Power' in player_table.columns:
                 player_table['Power'] = player_table['Power'].apply(lambda x: f"{x:,}" if pd.notna(x) else '0')
+            
+            for resource in ['Gold', 'Lumber', 'Stone', 'Metal', 'Food']:
+                if resource in player_table.columns:
+                    player_table[resource] = player_table[resource].apply(lambda x: f"{int(x):,}" if pd.notna(x) and x != 0 else '0')
             
             st.dataframe(player_table, use_container_width=True, hide_index=True)
     

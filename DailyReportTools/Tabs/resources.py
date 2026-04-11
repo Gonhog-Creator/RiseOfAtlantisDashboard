@@ -165,6 +165,120 @@ def create_resources_tab(filtered_df):
             
             st.plotly_chart(fig_resources, use_container_width=True)
             
+            # Elite Items Section (Fangtooth Respirators)
+            st.markdown("---")
+            st.markdown("### Elite Items")
+            
+            # Look for fangtooth respirators in resources data
+            respirator_values = []
+            respirator_dates = []
+            
+            for _, row in filtered_df.iterrows():
+                respirator_count = 0
+                
+                # Check resources dictionary for fangtooth
+                if 'resources' in row and isinstance(row['resources'], dict):
+                    # Look for resource_fangtooth or similar
+                    for resource_name, resource_value in row['resources'].items():
+                        if 'fangtooth' in resource_name.lower():
+                            respirator_count += resource_value
+                
+                # Also check raw_player_data for comprehensive format
+                if 'raw_player_data' in row and row['raw_player_data'] is not None:
+                    player_data = row['raw_player_data']
+                    # Look for resource_fangtooth column
+                    if 'resource_fangtooth' in player_data.columns:
+                        respirator_count += player_data['resource_fangtooth'].fillna(0).sum()
+                
+                respirator_values.append(respirator_count)
+                respirator_dates.append(row['date'])
+            
+            # Filter out leading zeros, keep only first zero point and actual data
+            if sum(respirator_values) > 0:
+                # Find first non-zero index
+                first_nonzero_idx = next((i for i, v in enumerate(respirator_values) if v > 0), None)
+                if first_nonzero_idx is not None and first_nonzero_idx > 0:
+                    # Keep only the first zero and everything after first_nonzero_idx
+                    respirator_values = [respirator_values[first_nonzero_idx - 1]] + respirator_values[first_nonzero_idx:]
+                    respirator_dates = [respirator_dates[first_nonzero_idx - 1]] + respirator_dates[first_nonzero_idx:]
+            
+            if sum(respirator_values) > 0:
+                # Add icon and name inline
+                col1, col2 = st.columns([1, 15])
+                with col1:
+                    image_path = "Images/fangtooth_respirator.webp"
+                    try:
+                        st.image(image_path, width=50)
+                    except:
+                        st.write("🦷")
+                with col2:
+                    st.markdown("### Fangtooth Respirators")
+                
+                # Calculate daily rate
+                if len(respirator_values) >= 2:
+                    daily_rates = calculate_daily_rate(respirator_values, respirator_dates)
+                    
+                    # Aggregate by date
+                    date_df = pd.DataFrame({
+                        'date': respirator_dates,
+                        'daily_rate': daily_rates
+                    })
+                    daily_agg = date_df.groupby(date_df['date'].dt.date).agg({
+                        'daily_rate': 'mean'
+                    }).reset_index()
+                    daily_agg['date'] = pd.to_datetime(daily_agg['date'])
+                    
+                    # Color bars based on positive/negative
+                    bar_colors = ['green' if x >= 0 else 'red' for x in daily_agg['daily_rate']]
+                else:
+                    daily_agg = None
+                
+                # Create combined chart with line and bar
+                fig_respirators = make_subplots(
+                    rows=1, cols=2,
+                    subplot_titles=["Total Quantity", "Daily Rate"],
+                    horizontal_spacing=0.1
+                )
+                
+                fig_respirators.add_trace(
+                    go.Scatter(
+                        x=respirator_dates,
+                        y=respirator_values,
+                        mode='lines+markers',
+                        name='Total',
+                        line=dict(color='#FF6B6B', width=2),
+                        marker=dict(size=6, color='#FF6B6B'),
+                        hovertemplate='<b>Fangtooth Respirators</b><br>Date: %{x}<br>Quantity: %{y:,.0f}<extra></extra>'
+                    ),
+                    row=1, col=1
+                )
+                
+                if daily_agg is not None:
+                    fig_respirators.add_trace(
+                        go.Bar(
+                            x=daily_agg['date'],
+                            y=daily_agg['daily_rate'],
+                            name='Daily Rate',
+                            marker=dict(color=bar_colors),
+                            hovertemplate='<b>Daily Rate</b><br>Date: %{x}<br>Change: %{y:,.0f}<extra></extra>'
+                        ),
+                        row=1, col=2
+                    )
+                
+                fig_respirators.update_layout(
+                    height=350,
+                    showlegend=False
+                )
+                
+                fig_respirators.update_xaxes(title_text="Date", row=1, col=1)
+                fig_respirators.update_xaxes(title_text="Date", row=1, col=2)
+                fig_respirators.update_yaxes(title_text="Quantity", row=1, col=1)
+                fig_respirators.update_yaxes(title_text="Daily Change", row=1, col=2)
+                
+                st.plotly_chart(fig_respirators, use_container_width=True)
+            else:
+                st.info("No fangtooth respirators found in the data")
+            
             # Combined Resources Line Chart
             st.markdown("---")
             st.markdown("### 📈 All Resources Over Time")

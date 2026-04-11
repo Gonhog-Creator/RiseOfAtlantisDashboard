@@ -435,6 +435,124 @@ def create_overview_tab(filtered_df):
                     st.metric("Players", player_count)
             
             st.markdown("---")
+            st.markdown("### Elite Items")
+            
+            # Elite Items - Fangtooth Respirators
+            # Look for fangtooth respirators in resources data
+            respirator_values = []
+            respirator_dates = []
+            
+            for _, row in filtered_df.iterrows():
+                respirator_count = 0
+                
+                # Check resources dictionary for fangtooth
+                if 'resources' in row and isinstance(row['resources'], dict):
+                    # Look for resource_fangtooth or similar
+                    for resource_name, resource_value in row['resources'].items():
+                        if 'fangtooth' in resource_name.lower():
+                            respirator_count += resource_value
+                
+                # Also check raw_player_data for comprehensive format
+                if 'raw_player_data' in row and row['raw_player_data'] is not None:
+                    player_data = row['raw_player_data']
+                    # Look for resource_fangtooth column
+                    if 'resource_fangtooth' in player_data.columns:
+                        respirator_count += player_data['resource_fangtooth'].fillna(0).sum()
+                
+                respirator_values.append(respirator_count)
+                respirator_dates.append(row['date'])
+            
+            # Filter out leading zeros
+            if sum(respirator_values) > 0:
+                # Find first non-zero index
+                first_nonzero_idx = next((i for i, v in enumerate(respirator_values) if v > 0), None)
+                if first_nonzero_idx is not None and first_nonzero_idx > 0:
+                    # Keep only the first zero and everything after first_nonzero_idx
+                    respirator_values = [respirator_values[first_nonzero_idx - 1]] + respirator_values[first_nonzero_idx:]
+                    respirator_dates = [respirator_dates[first_nonzero_idx - 1]] + respirator_dates[first_nonzero_idx:]
+            
+            if sum(respirator_values) > 0:
+                # Calculate daily rate
+                if len(respirator_values) >= 2:
+                    daily_rates = []
+                    for i in range(len(respirator_values)):
+                        if i == 0:
+                            daily_rates.append(0)
+                        else:
+                            current_value = respirator_values[i]
+                            previous_value = respirator_values[i-1]
+                            current_time = respirator_dates[i]
+                            previous_time = respirator_dates[i-1]
+                            
+                            # Calculate time difference in days
+                            time_diff = (current_time - previous_time).total_seconds() / (24 * 3600)
+                            
+                            if time_diff > 0:
+                                daily_rate = (current_value - previous_value) / time_diff
+                                daily_rates.append(daily_rate)
+                            else:
+                                daily_rates.append(0)
+                    
+                    daily_change = daily_rates[-1] if daily_rates else 0
+                else:
+                    daily_change = 0
+                
+                latest_amount = respirator_values[-1]
+                
+                # Calculate average per player
+                latest_players = filtered_df.iloc[-1]['total_players']
+                avg_per_player = latest_amount / latest_players if latest_players > 0 else 0
+                
+                # Display elite item tile (compact)
+                # For now, single item - will expand to horizontal grid when more items added
+                # Currently using single column, but structure is ready for horizontal layout
+                elite_cols = st.columns(1)
+                with elite_cols[0]:
+                    # Read image and convert to base64
+                    import base64
+                    image_path = "Images/fangtooth_respirator.webp"
+                    try:
+                        with open(image_path, "rb") as image_file:
+                            encoded_image = base64.b64encode(image_file.read()).decode()
+                            image_html = f'<img src="data:image/webp;base64,{encoded_image}" width="50" style="border-radius: 4px;">'
+                    except:
+                        image_html = ""
+                    
+                    st.markdown(f"""
+                    <style>
+                    .elite-item-tile {{
+                        border: 1px solid #ddd;
+                        border-radius: 8px;
+                        padding: 15px;
+                        margin: 5px 0;
+                        transition: all 0.3s ease;
+                        cursor: pointer;
+                        max-width: 300px;
+                        background-color: #2d2d2d;
+                    }}
+                    .elite-item-tile:hover {{
+                        border-color: #FF6B6B;
+                        box-shadow: 0 4px 8px rgba(255, 107, 107, 0.3);
+                        transform: translateY(-2px);
+                        background-color: rgba(255, 107, 107, 0.05);
+                    }}
+                    </style>
+                    <div class="elite-item-tile">
+                        <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px;">
+                            {image_html}
+                            <div style="font-size: 14px; font-weight: bold; color: white;">Fangtooth Respirators</div>
+                        </div>
+                        <div style="font-size: 20px; font-weight: bold; margin: 5px 0; color: white;">{int(latest_amount):,}</div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 14px; color: white; background-color: {'green' if daily_change >= 0 else 'red'}; padding: 2px 8px; border-radius: 12px;">{int(daily_change):,}/day</span>
+                            <span style="background-color: #666; color: white; padding: 2px 8px; border-radius: 12px; font-size: 14px;">
+                                {int(avg_per_player):,}/player
+                            </span>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+            
+            st.markdown("---")
             st.markdown("### 📈 Speedups Overview")
             
             # Define speedup items with their time durations in increasing order
@@ -451,7 +569,26 @@ def create_overview_tab(filtered_df):
                 'Blitz': '4 days',
                 'Testronius Dust': '15%',
                 'Testronius Powder': '30%',
+                'Testronius Deluxe': '50%',
                 'Testronius Infusion': '99%'
+            }
+            
+            # Speedup image map
+            speedup_image_map = {
+                'Blink': 'Blink.webp',
+                'Hop': 'Hop.webp',
+                'Skip': 'Skip.webp',
+                'Jump': 'Jump.webp',
+                'Leap': 'Leap.webp',
+                'Bounce': 'Bounce.webp',
+                'Bore': 'Bore.webp',
+                'Bolt': 'Bolt.webp',
+                'Blast': 'Blast.webp',
+                'Blitz': 'Blitz.webp',
+                'Testronius Dust': 'Testronius_powder.webp',
+                'Testronius Powder': 'Testronius_powder.webp',
+                'Testronius Deluxe': 'Testronius_deluxe.webp',
+                'Testronius Infusion': 'Infusion_testronius.webp'
             }
             
             # Get all item types and find speedup items
@@ -472,10 +609,10 @@ def create_overview_tab(filtered_df):
                         break
             
             if available_speedups:
-                # Create grid for speedup tiles (3 per row)
-                for i in range(0, len(available_speedups), 3):
-                    speedup_cols = st.columns(3)
-                    for j, speedup_type in enumerate(available_speedups[i:i+3]):
+                # Create grid for speedup tiles (horizontal layout - 5 per row)
+                for i in range(0, len(available_speedups), 5):
+                    speedup_cols = st.columns(5)
+                    for j, speedup_type in enumerate(available_speedups[i:i+5]):
                         with speedup_cols[j]:
                             # Get latest amount (using same logic as speedups tab)
                             sorted_df = filtered_df.sort_values('date')
@@ -541,27 +678,43 @@ def create_overview_tab(filtered_df):
                             latest_players = sorted_df.iloc[-1]['total_players']
                             avg_per_player = latest_amount / latest_players if latest_players > 0 else 0
                             
-                            # Create custom metric with average per player
+                            # Read image and convert to base64
+                            import base64
+                            image_file = speedup_image_map.get(speedup_type, 'Bolt.webp')
+                            image_path = f"Images/{image_file}"
+                            try:
+                                with open(image_path, "rb") as image_file:
+                                    encoded_image = base64.b64encode(image_file.read()).decode()
+                                    image_html = f'<img src="data:image/webp;base64,{encoded_image}" width="50" style="border-radius: 4px;">'
+                            except:
+                                image_html = ""
+                            
+                            # Create custom metric with average per player (compact tile style)
                             st.markdown(f"""
                             <style>
-                            .speedup-tile-{speedup_type.lower().replace(' ', '-')} {{
+                            .speedup-tile {{
                                 border: 1px solid #ddd;
                                 border-radius: 8px;
-                                padding: 10px;
+                                padding: 15px;
                                 margin: 5px 0;
                                 transition: all 0.3s ease;
                                 cursor: pointer;
+                                max-width: 300px;
+                                background-color: #2d2d2d;
                             }}
-                            .speedup-tile-{speedup_type.lower().replace(' ', '-')}:hover {{
+                            .speedup-tile:hover {{
                                 border-color: #4CAF50;
                                 box-shadow: 0 4px 8px rgba(76, 175, 80, 0.3);
                                 transform: translateY(-2px);
                                 background-color: rgba(76, 175, 80, 0.05);
                             }}
                             </style>
-                            <div class="speedup-tile-{speedup_type.lower().replace(' ', '-')}">
-                                <div style="font-size: 14px; font-weight: bold; color: white;">⚡ {speedup_type} ({time_duration})</div>
-                                <div style="font-size: 20px; font-weight: bold; margin: 5px 0;">{int(latest_amount):,}</div>
+                            <div class="speedup-tile">
+                                <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px;">
+                                    {image_html}
+                                    <div style="font-size: 14px; font-weight: bold; color: white;">{speedup_type} ({time_duration})</div>
+                                </div>
+                                <div style="font-size: 20px; font-weight: bold; margin: 5px 0; color: white;">{int(latest_amount):,}</div>
                                 <div style="display: flex; align-items: center; gap: 10px;">
                                     <span style="font-size: 14px; color: white; background-color: {'green' if daily_change >= 0 else 'red'}; padding: 2px 8px; border-radius: 12px;">{int(daily_change):,}/day</span>
                                     <span style="background-color: #666; color: white; padding: 2px 8px; border-radius: 12px; font-size: 14px;">
