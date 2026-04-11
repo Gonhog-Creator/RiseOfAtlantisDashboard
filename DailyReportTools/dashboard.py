@@ -66,6 +66,9 @@ def get_commit_history():
                 if '===COMMIT_END===' in commit:
                     # Remove the end marker
                     message = commit.replace('===COMMIT_END===', '').strip()
+                    # Remove TODO and anything after it
+                    if 'TODO' in message:
+                        message = message.split('TODO')[0].strip()
                     version_match = re.search(r'(\d+\.\d+(?:\.\d+)?)', message)
                     if version_match:
                         version = version_match.group(1)
