@@ -275,12 +275,19 @@ def main():
         current_dir = os.path.dirname(os.path.abspath(__file__))
         dashboard_path = os.path.join(current_dir, 'dashboard.py')
         
+        # Change to the DailyReportTools directory to ensure relative paths work
+        original_cwd = os.getcwd()
+        os.chdir(current_dir)
+        
         # Read and execute the dashboard code
         with open(dashboard_path, 'r') as f:
             dashboard_code = f.read()
         
         # Execute the dashboard code in the current namespace
         exec(dashboard_code, globals())
+        
+        # Restore original working directory
+        os.chdir(original_cwd)
         
     except FileNotFoundError:
         st.error(f"Dashboard file not found at: {dashboard_path}")
