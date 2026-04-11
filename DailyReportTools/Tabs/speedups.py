@@ -54,8 +54,13 @@ def create_speedups_tab(filtered_df):
         }
         
         # Check if we have comprehensive data format (same as items tab)
-        latest_data = filtered_df.iloc[-1]
-        use_comprehensive = 'raw_player_data' in latest_data and latest_data['raw_player_data'] is not None
+        # Check if ANY row has comprehensive data, not just the latest
+        use_comprehensive = False
+        for _, row in filtered_df.iterrows():
+            if 'raw_player_data' in row and row['raw_player_data'] is not None:
+                if isinstance(row['raw_player_data'], pd.DataFrame):
+                    use_comprehensive = True
+                    break
         
         # Get all item types and find speedup items (same logic as items tab)
         all_items = set()
@@ -96,7 +101,11 @@ def create_speedups_tab(filtered_df):
                 if search_key in search_name or speedup_key.lower() in search_name:
                     available_speedups.append(speedup_key)
                     break
-                    break
+        
+        # If no predefined speedup items found, show all items as fallback
+        if not available_speedups and all_items:
+            for item_name in sorted(all_items):
+                available_speedups.append(item_name)
         
         if available_speedups:
             # Lock to available speedups only (no selector)

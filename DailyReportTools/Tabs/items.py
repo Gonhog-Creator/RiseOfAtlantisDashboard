@@ -129,8 +129,13 @@ def create_items_tab(df):
     st.markdown("### 📦 Item Analysis")
     
     # Check if we have comprehensive data format
-    latest_data = df.iloc[-1]
-    use_comprehensive = 'raw_player_data' in latest_data and latest_data['raw_player_data'] is not None
+    # Check if ANY row has comprehensive data, not just the latest
+    use_comprehensive = False
+    for _, row in df.iterrows():
+        if 'raw_player_data' in row and row['raw_player_data'] is not None:
+            if isinstance(row['raw_player_data'], pd.DataFrame):
+                use_comprehensive = True
+                break
     
     # Extract all unique items from all reports and check if they have any quantity > 0
     all_items = set()
@@ -148,8 +153,8 @@ def create_items_tab(df):
                             try:
                                 items_dict = json.loads(player_row['items_json'])
                                 for item_name, count in items_dict.items():
+                                    all_items.add(item_name)
                                     if count > 0:
-                                        all_items.add(item_name)
                                         items_with_history.add(item_name)
                             except:
                                 continue
