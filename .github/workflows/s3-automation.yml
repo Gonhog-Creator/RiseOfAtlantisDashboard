@@ -21,8 +21,7 @@ jobs:
     
     - name: Install dependencies
       run: |
-        cd S3Automation
-        pip install -r requirements.txt
+        pip install boto3 requests
     
     - name: Run S3 automation
       env:
@@ -35,5 +34,6 @@ jobs:
         GITHUB_OWNER: ${{ github.repository_owner }}
         GITHUB_REPO: roarealmdata
       run: |
+        export PYTHONPATH="${GITHUB_WORKSPACE}"
         cd S3Automation
         python s3_automation.py
