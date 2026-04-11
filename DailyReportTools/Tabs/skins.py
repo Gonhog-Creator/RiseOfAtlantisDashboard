@@ -5,26 +5,53 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import json
 
+# Mapping of JSON skin names to common display names
+SKIN_NAME_MAPPING = {
+    'skin_city_alpha_all(building)': 'City Alpha All',
+    'skin_avatar_border_founders(avatar_border)': 'Founders Avatar Border',
+    'skin_city_founders(building)': 'City Founders',
+    'skin_city_alpha_lvl9(building)': 'City Alpha Level 9',
+    'skin_city_top3_challenge_1(building)': 'City Top 3 Challenge 1',
+    'skin_water_pack_avatar_border(avatar_border)': 'Water Pack Avatar Border',
+    'skin_water_pack_fortress(building)': 'Water Pack Fortress',
+    'skin_city_top1_challenge_pvp_1(building)': 'City Top 1 PvP Challenge',
+}
+
+def get_common_skin_name(json_name):
+    """Convert JSON skin name to common display name"""
+    return SKIN_NAME_MAPPING.get(json_name, json_name)
+
 def create_skins_tab(filtered_df):
     """Create the Skins tab showing skin distribution and analytics"""
     
     if not filtered_df.empty:
         st.markdown("### Skins Skin Analytics")
         
-        # Check if we have comprehensive data with skins information
-        latest_data = filtered_df.iloc[-1]
+        # Find the latest data with skins information (comprehensive CSV)
+        latest_skins_data = None
+        for i in range(len(filtered_df) - 1, -1, -1):  # Iterate backwards to find latest with skin data
+            data = filtered_df.iloc[i]
+            if 'raw_player_data' in data and data['raw_player_data'] is not None:
+                latest_skins_data = data
+                break
+        
+        if latest_skins_data is None:
+            st.warning("No comprehensive CSV data found. This feature requires comprehensive CSV format.")
+            return
+        
+        latest_data = latest_skins_data
         
         if 'raw_player_data' in latest_data:
             player_df = latest_data['raw_player_data']
             
             # Handle case where raw_player_data might be converted to float by pandas
-            if isinstance(player_df, (int, float)) or not hasattr(player_df, 'columns'):
+            if player_df is None:
+                st.warning("Raw player data is None. This feature requires the comprehensive CSV format.")
+            elif isinstance(player_df, (int, float)) or not hasattr(player_df, 'columns'):
                 st.warning(f"Player data format error in skins tab: expected DataFrame but got {type(player_df)}. Value: {player_df}")
             else:
                 # Check if equipped_skins column exists
                 if 'equipped_skins' in player_df.columns:
-                    st.markdown("#### Stats Skin Distribution Overview")
-                
                     # Process skins data
                     skins_data = {}
                     players_with_skins = 0
@@ -35,50 +62,63 @@ def create_skins_tab(filtered_df):
                         if pd.notna(equipped_skins) and equipped_skins:
                             players_with_skins += 1
                             
-                            # Parse skins (assuming it's a JSON string or comma-separated)
+                            # Parse skins (assuming it's a JSON string, comma-separated, or pipe-separated)
                             try:
                                 if isinstance(equipped_skins, str):
-                                    # Try to parse as JSON first
-                                    if equipped_skins.startswith('{') or equipped_skins.startswith('['):
-                                        skins_list = json.loads(equipped_skins)
-                                        if isinstance(skins_list, dict):
-                                            skins_list = list(skins_list.keys())
-                                    else:
-                                        # Assume comma-separated
-                                        skins_list = [skin.strip() for skin in equipped_skins.split(',')]
+                                    # First split by | for combined entries
+                                    combined_entries = equipped_skins.split('|')
+                                    skins_list = []
+                                    
+                                    for entry in combined_entries:
+                                        entry = entry.strip()
+                                        # Try to parse as JSON first
+                                        if entry.startswith('{') or entry.startswith('['):
+                                            try:
+                                                parsed = json.loads(entry)
+                                                if isinstance(parsed, dict):
+                                                    skins_list.extend(list(parsed.keys()))
+                                                else:
+                                                    skins_list.extend(parsed)
+                                            except:
+                                                skins_list.append(entry)
+                                        else:
+                                            # Assume comma-separated or single entry
+                                            if ',' in entry:
+                                                skins_list.extend([skin.strip() for skin in entry.split(',')])
+                                            else:
+                                                skins_list.append(entry)
                                 else:
                                     skins_list = [equipped_skins]
                                 
                                 for skin in skins_list:
                                     if skin and skin.strip():
                                         skin_name = skin.strip()
-                                        skins_data[skin_name] = skins_data.get(skin_name, 0) + 1
-                            except:
-                                # If parsing fails, treat as single skin
+                                        common_name = get_common_skin_name(skin_name)
+                                        skins_data[common_name] = skins_data.get(common_name, 0) + 1
+                            except Exception as e:
+                                # If parsing fails, try simple splitting
                                 if equipped_skins and str(equipped_skins).strip():
-                                    skin_name = str(equipped_skins).strip()
-                                    skins_data[skin_name] = skins_data.get(skin_name, 0) + 1
+                                    # Try splitting by | first
+                                    combined_entries = str(equipped_skins).strip().split('|')
+                                    for entry in combined_entries:
+                                        entry = entry.strip()
+                                        if entry:
+                                            common_name = get_common_skin_name(entry)
+                                            skins_data[common_name] = skins_data.get(common_name, 0) + 1
                                     players_with_skins += 1
                 
                 # Display overview metrics
-                    col1, col2, col3 = st.columns(3)
+                    col1, col2 = st.columns(2)
                     
                     with col1:
                         st.metric(
-                            "Skins Total Players",
-                            f"{total_players:,}"
+                            "Players with Skins",
+                            f"{players_with_skins:,} ({(players_with_skins/total_players*100):.1f}%)" if total_players > 0 else f"{players_with_skins:,}"
                         )
                     
                     with col2:
                         st.metric(
-                            "Skins Players with Skins",
-                            f"{players_with_skins:,}",
-                            f"{(players_with_skins/total_players*100):.1f}%" if total_players > 0 else "0%"
-                        )
-                    
-                    with col3:
-                        st.metric(
-                            "Skins Unique Skins",
+                            "Unique Skins",
                             f"{len(skins_data):,}"
                         )
                     
@@ -86,7 +126,6 @@ def create_skins_tab(filtered_df):
                         # Create skin distribution dataframe
                         skins_df = pd.DataFrame(list(skins_data.items()), columns=['Skin Name', 'Player Count'])
                         skins_df = skins_df.sort_values('Player Count', ascending=False)
-                        skins_df['Percentage'] = (skins_df['Player Count'] / players_with_skins * 100).round(1) if players_with_skins > 0 else 0
                         
                         # Display skin distribution table
                         st.markdown("#### Table Skin Popularity Rankings")
@@ -100,16 +139,13 @@ def create_skins_tab(filtered_df):
                         
                         fig_top_skins = px.bar(
                             top_skins,
-                            x='Player Count',
-                            y='Skin Name',
-                            orientation='h',
-                            title='Top 15 Most Popular Skins',
-                            color='Player Count',
-                            color_continuous_scale='viridis'
+                            x='Skin Name',
+                            y='Player Count',
+                            title='Top 15 Most Popular Skins'
                         )
                         fig_top_skins.update_layout(
-                            xaxis_title="Number of Players",
-                            yaxis_title="Skin Name",
+                            xaxis_title="Skin Name",
+                            yaxis_title="Number of Players",
                             height=500
                         )
                         st.plotly_chart(fig_top_skins, use_container_width=True)
@@ -137,71 +173,6 @@ def create_skins_tab(filtered_df):
                             fig_pie.update_layout(height=500)
                             st.plotly_chart(fig_pie, use_container_width=True)
                         
-                        # Skin rarity analysis
-                        st.markdown("#### Rarity Skin Rarity Analysis")
-                    
-                    # Define rarity categories based on player count
-                        total_with_skins = players_with_skins
-                        rarity_data = []
-                        
-                        for _, row in skins_df.iterrows():
-                            player_count = row['Player Count']
-                            percentage = (player_count / total_with_skins) * 100 if total_with_skins > 0 else 0
-                            
-                            if percentage >= 20:
-                                rarity = "Common"
-                            elif percentage >= 10:
-                                rarity = "Uncommon"
-                            elif percentage >= 5:
-                                rarity = "Rare"
-                            elif percentage >= 1:
-                                rarity = "Epic"
-                            else:
-                                rarity = "Legendary"
-                            
-                            rarity_data.append({
-                                'Skin Name': row['Skin Name'],
-                                'Player Count': player_count,
-                                'Percentage': percentage,
-                                'Rarity': rarity
-                            })
-                        
-                        rarity_df = pd.DataFrame(rarity_data)
-                        
-                        # Rarity distribution
-                        rarity_counts = rarity_df['Rarity'].value_counts().reset_index()
-                        rarity_counts.columns = ['Rarity', 'Skin Count']
-                        
-                        col1, col2 = st.columns(2)
-                        
-                        with col1:
-                            fig_rarity = px.bar(
-                                rarity_counts,
-                                x='Rarity',
-                                y='Skin Count',
-                                title='Skin Count by Rarity',
-                                color='Rarity',
-                                color_discrete_map={
-                                    'Common': 'gray',
-                                    'Uncommon': 'green',
-                                    'Rare': 'blue',
-                                    'Epic': 'purple',
-                                    'Legendary': 'orange'
-                                }
-                            )
-                            fig_rarity.update_layout(height=400)
-                            st.plotly_chart(fig_rarity, use_container_width=True)
-                        
-                        with col2:
-                            # Show rarity table
-                            rarity_summary = rarity_df.groupby('Rarity').agg({
-                                'Skin Name': 'count',
-                                'Player Count': 'sum',
-                                'Percentage': 'mean'
-                            }).round(1)
-                            rarity_summary.columns = ['Number of Skins', 'Total Players', 'Avg Percentage']
-                            st.dataframe(rarity_summary, use_container_width=True)
-                        
                         # Detailed skin analysis
                         st.markdown("#### Detailed Skin Analysis")
                         
@@ -218,18 +189,32 @@ def create_skins_tab(filtered_df):
                                 if pd.notna(equipped_skins) and equipped_skins:
                                     try:
                                         if isinstance(equipped_skins, str):
-                                            if equipped_skins.startswith('{') or equipped_skins.startswith('['):
-                                                skins_list = json.loads(equipped_skins)
-                                                if isinstance(skins_list, dict):
-                                                    skins_list = list(skins_list.keys())
-                                            else:
-                                                skins_list = [skin.strip() for skin in equipped_skins.split(',')]
+                                            # First split by | for combined entries
+                                            combined_entries = equipped_skins.split('|')
+                                            skins_list = []
+                                            
+                                            for entry in combined_entries:
+                                                # Try to parse as JSON first
+                                                if entry.startswith('{') or entry.startswith('['):
+                                                    try:
+                                                        parsed = json.loads(entry)
+                                                        if isinstance(parsed, dict):
+                                                            skins_list.extend(list(parsed.keys()))
+                                                        else:
+                                                            skins_list.extend(parsed)
+                                                    except:
+                                                        skins_list.append(entry.strip())
+                                                else:
+                                                    # Assume comma-separated
+                                                    skins_list.extend([skin.strip() for skin in entry.split(',')])
                                         else:
                                             skins_list = [equipped_skins]
                                         
-                                        if selected_skin in [s.strip() for s in skins_list]:
+                                        # Convert JSON names to common names for comparison
+                                        common_skin_names = [get_common_skin_name(s.strip()) for s in skins_list]
+                                        if selected_skin in common_skin_names:
                                             skin_players.append({
-                                                'Account ID': player['account_id'][:8] + "..." if len(player['account_id']) > 8 else player['account_id'],
+                                                'Player Name': player.get('username', 'Unknown'),
                                                 'Alliance': player.get('alliance_name', 'None'),
                                                 'Power': player.get('power', 0),
                                                 'Created': player.get('created_at', 'Unknown')
@@ -242,9 +227,13 @@ def create_skins_tab(filtered_df):
                                 
                                 skin_df = pd.DataFrame(skin_players)
                                 skin_df = skin_df.sort_values('Power', ascending=False)
-                                st.dataframe(skin_df, use_container_width=True)
                                 
-                                # Power distribution for this skin
+                                # Create display copy with formatted Power
+                                display_df = skin_df.copy()
+                                display_df['Power'] = display_df['Power'].apply(lambda x: f"{x:,}")
+                                st.dataframe(display_df, use_container_width=True)
+                                
+                                # Power distribution for this skin (use numeric Power)
                                 if 'Power' in skin_df.columns and skin_df['Power'].sum() > 0:
                                     fig_power = px.histogram(
                                         skin_df,

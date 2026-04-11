@@ -134,6 +134,140 @@ def create_troops_tab(filtered_df):
                                 
                                 col_idx = (col_idx + 1) % 3
             
+            # Troops Over Time Chart
+            st.markdown("#### Troops Over Time")
+            
+            # Get all troop types from the latest data
+            if 'raw_player_data' in latest_data:
+                player_df = latest_data['raw_player_data']
+                troop_columns = [col for col in player_df.columns if col.startswith('troop_') and col != 'unique_troop_types']
+                
+                if troop_columns:
+                    # Create checkboxes for troop selection (like resource tab)
+                    troop_names = [col.replace('troop_', '').replace('_', ' ').title() for col in troop_columns]
+                    
+                    # Add resource selection toggles
+                    st.markdown("**Select Troop Types to Display:**")
+                    
+                    # Split checkboxes into two rows to prevent name cutoff
+                    mid_point = (len(troop_names) + 1) // 2
+                    first_row_troops = troop_names[:mid_point]
+                    second_row_troops = troop_names[mid_point:]
+                    
+                    selected_troops_display = []
+                    
+                    # First row of checkboxes
+                    troop_cols_row1 = st.columns(len(first_row_troops))
+                    for i, troop in enumerate(first_row_troops):
+                        with troop_cols_row1[i]:
+                            # Default all individual troops to selected
+                            is_selected = st.checkbox(
+                                troop, 
+                                value=True,
+                                key=f"show_troop_{troop}"
+                            )
+                            if is_selected:
+                                selected_troops_display.append(troop)
+                    
+                    # Second row of checkboxes
+                    troop_cols_row2 = st.columns(len(second_row_troops) + 1)  # +1 for Total Troops
+                    for i, troop in enumerate(second_row_troops):
+                        with troop_cols_row2[i]:
+                            # Default all individual troops to selected
+                            is_selected = st.checkbox(
+                                troop, 
+                                value=True,
+                                key=f"show_troop_{troop}"
+                            )
+                            if is_selected:
+                                selected_troops_display.append(troop)
+                    
+                    # Add Total Troops checkbox in second row
+                    with troop_cols_row2[len(second_row_troops)]:
+                        # Default Total Troops to not selected
+                        is_total_selected = st.checkbox(
+                            "Total Troops",
+                            value=False,
+                            key="show_troop_total"
+                        )
+                        if is_total_selected:
+                            selected_troops_display = ["Total Troops"]
+                    
+                    # Collect troops data over time from all CSV files
+                    troops_over_time = []
+                    
+                    if selected_troops_display:
+                        for _, row in filtered_df.iterrows():
+                            if 'troops_data' in row and row['troops_data'] and not isinstance(row['troops_data'], (int, float)):
+                                troops_data = row['troops_data']
+                                date = row['date']
+                                
+                                if isinstance(troops_data, dict):
+                                    troop_entry = {'Date': date}
+                                    
+                                    # Add individual troop data
+                                    for troop_col in troop_columns:
+                                        troop_name = troop_col.replace('troop_', '').replace('_', ' ').title()
+                                        if troop_name in selected_troops_display:
+                                            troop_value = troops_data.get(troop_col, 0)
+                                            # Handle numpy types
+                                            if hasattr(troop_value, 'item'):
+                                                troop_value = troop_value.item()
+                                            troop_entry[troop_name] = troop_value
+                                    
+                                    # Add total troops if selected
+                                    if "Total Troops" in selected_troops_display:
+                                        total_troops = 0
+                                        for key, value in troops_data.items():
+                                            try:
+                                                if key == 'unique_troop_types' or isinstance(value, str):
+                                                    continue
+                                                if hasattr(value, 'item'):
+                                                    numeric_value = value.item()
+                                                else:
+                                                    numeric_value = value
+                                                
+                                                if isinstance(numeric_value, (int, float)) and not pd.isna(numeric_value) and numeric_value > 0:
+                                                    total_troops += numeric_value
+                                            except:
+                                                continue
+                                        troop_entry["Total Troops"] = total_troops
+                                    
+                                    troops_over_time.append(troop_entry)
+                        
+                        if troops_over_time:
+                            troops_over_time_df = pd.DataFrame(troops_over_time)
+                            troops_over_time_df = troops_over_time_df.sort_values('Date')
+                            
+                            # Create line chart
+                            fig_troops_over_time = go.Figure()
+                            
+                            for troop in selected_troops_display:
+                                if troop in troops_over_time_df.columns:
+                                    fig_troops_over_time.add_trace(
+                                        go.Scatter(
+                                            x=troops_over_time_df['Date'],
+                                            y=troops_over_time_df[troop],
+                                            mode='lines+markers',
+                                            name=troop,
+                                            line=dict(width=2)
+                                        )
+                                    )
+                            
+                            fig_troops_over_time.update_layout(
+                                title="Troop Count Over Time",
+                                xaxis_title="Date",
+                                yaxis_title="Number of Troops",
+                                height=400,
+                                hovermode='x unified'
+                            )
+                            
+                            st.plotly_chart(fig_troops_over_time, use_container_width=True)
+                        else:
+                            st.warning("No troops data available over time")
+                    else:
+                        st.info("Please select at least one troop type to display")
+            
             # Top 5 Players with Largest Armies
             st.markdown("#### Top 5 Players by Army Size")
             

@@ -192,7 +192,7 @@ def load_parsed_cache():
 def parse_comprehensive_csv(file_path):
     """Parse the new comprehensive_player_data.csv format"""
     try:
-        # Extract date from filename - assume format: comprehensive_player_data_YYYY-MM-DD_HH-MM-SS.csv
+        # Extract date from filename - format: comprehensive_player_data_YYYY-MM-DD_HHMMSS.csv
         filename = os.path.basename(file_path)
         
         # Try to extract date from filename
@@ -251,26 +251,7 @@ def parse_comprehensive_csv(file_path):
                 resources[name] = total_amount
         
         # Extract additional data for new tabs
-        buildings_data = {}
-        if 'buildings_metadata' in df.columns:
-            # Parse buildings metadata JSON
-            for _, row in df.iterrows():
-                if pd.notna(row['buildings_metadata']):
-                    try:
-                        buildings_info = eval(row['buildings_metadata'])  # Convert string to dict
-                        for city_info in buildings_info.values():
-                            if ':' in city_info:
-                                buildings_list = city_info.split(':')[1].strip('[]')
-                                for building in buildings_list.split(','):
-                                    if ':' in building:
-                                        building_name, level = building.split(':')
-                                        building_name = building_name.strip()
-                                        level = int(level.strip())
-                                        if building_name not in buildings_data:
-                                            buildings_data[building_name] = []
-                                        buildings_data[building_name].append(level)
-                    except:
-                        continue
+        buildings_data = {}  # Buildings data extraction moved to buildings.py
         
         # Parse troops data (assuming it's in a column)
         troops_data = {}
@@ -295,10 +276,10 @@ def parse_comprehensive_csv(file_path):
         
         # Only calculate ceasefire data for comprehensive CSV files with required columns
         if 'active_effects' in df.columns and 'resource_gold' in df.columns:
-            # Check for ceasefire effects (prevent_attacks)
-            ceasefire_effects = ['server:prevent_attacks:1', 'armistice_agreement:prevent_attacks:1']
+            # Check for ceasefire effects (prevent_attacks) - match ceasefire tab logic
+            attack_prevention_effects = ['prevent_attacks:1']
             df['has_ceasefire'] = df['active_effects'].fillna('').astype(str).apply(
-                lambda x: any(effect in x for effect in ceasefire_effects)
+                lambda x: any(effect in x for effect in attack_prevention_effects)
             )
             
             # Calculate protected resources for each resource type
@@ -321,7 +302,6 @@ def parse_comprehensive_csv(file_path):
             'date': date,
             'filename': filename,
             'total_players': total_players,
-            'total_power': total_power,
             'avg_power_per_player': avg_power_per_player,
             'resources': resources,
             'items': items,

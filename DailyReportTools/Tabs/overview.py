@@ -79,6 +79,18 @@ def create_overview_tab(filtered_df):
         display_resources = [r for r in key_resources if r in all_resources]
         
         if display_resources:
+            # Find the latest comprehensive data for accurate calculations
+            latest_comprehensive_data = None
+            for i in range(len(filtered_df) - 1, -1, -1):  # Iterate backwards to find latest comprehensive data
+                data = filtered_df.iloc[i]
+                if 'raw_player_data' in data and data['raw_player_data'] is not None:
+                    latest_comprehensive_data = data
+                    break
+            
+            if latest_comprehensive_data is None:
+                st.warning("No comprehensive CSV data found for accurate resource calculations.")
+                return
+            
             # Create grid layout
             col1, col2 = st.columns(2)
             
@@ -96,7 +108,8 @@ def create_overview_tab(filtered_df):
                 # Calculate daily increases using true daily rates
                 sorted_filtered = filtered_df.sort_values('date')
                 if len(sorted_filtered) >= 2:
-                    latest_resources = sorted_filtered.iloc[-1]['resources']
+                    # Use comprehensive data for latest resources
+                    latest_resources = latest_comprehensive_data['resources']
                     previous_resources = sorted_filtered.iloc[-2]['resources']
                     
                     # Create resource values list for daily rate calculation
@@ -160,11 +173,10 @@ def create_overview_tab(filtered_df):
                                     # Get ceasefire protection data for this resource
                                     protected_amount = 0
                                     protected_percentage = 0
-                                    latest_data = sorted_filtered.iloc[-1]
                                     
-                                    # Get ceasefire protection data if available
-                                    if 'ceasefire_data' in latest_data and isinstance(latest_data['ceasefire_data'], dict):
-                                        ceasefire_info = latest_data['ceasefire_data'].get(resource, {})
+                                    # Get ceasefire protection data if available from comprehensive data
+                                    if 'ceasefire_data' in latest_comprehensive_data and isinstance(latest_comprehensive_data['ceasefire_data'], dict):
+                                        ceasefire_info = latest_comprehensive_data['ceasefire_data'].get(resource, {})
                                         protected_amount = ceasefire_info.get('protected', 0)
                                         protected_percentage = ceasefire_info.get('protected_percentage', 0)
                                     

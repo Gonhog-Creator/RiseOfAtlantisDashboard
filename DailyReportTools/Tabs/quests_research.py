@@ -12,14 +12,28 @@ def create_quests_research_tab(filtered_df):
     if not filtered_df.empty:
         st.markdown("### Quests Quests & Research Analytics")
         
-        # Check if we have comprehensive data
-        latest_data = filtered_df.iloc[-1]
+        # Find the latest data with quests information (comprehensive CSV)
+        latest_quests_data = None
+        for i in range(len(filtered_df) - 1, -1, -1):  # Iterate backwards to find latest with quest data
+            data = filtered_df.iloc[i]
+            if 'raw_player_data' in data and data['raw_player_data'] is not None:
+                latest_quests_data = data
+                break
+        
+        if latest_quests_data is None:
+            st.warning("No comprehensive CSV data found. This feature requires comprehensive CSV format.")
+            return
+        
+        latest_data = latest_quests_data
         
         if 'raw_player_data' in latest_data:
             player_df = latest_data['raw_player_data']
             
             # Handle case where raw_player_data might be converted to float by pandas
-            if isinstance(player_df, (int, float)) or not hasattr(player_df, 'columns'):
+            available_columns = []
+            if player_df is None:
+                st.warning("Raw player data is None. This feature requires the comprehensive CSV format.")
+            elif isinstance(player_df, (int, float)) or not hasattr(player_df, 'columns'):
                 st.warning(f"Player data format error in quests tab: expected DataFrame but got {type(player_df)}. Value: {player_df}")
             else:
                 # Check if quests/research columns exist

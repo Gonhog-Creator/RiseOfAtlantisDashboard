@@ -18,9 +18,20 @@ class PlayerDataAnalyzer:
         self.database_path = database_path
         self.tar_file = os.path.join(database_path, "csv-exports_backup_2026-04-08_14-00-01_csv.tar.gz")
         self.extract_path = os.path.join(database_path, "extracted_data")
-        # Add date and time to output filename
-        current_datetime = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-        self.output_file = os.path.join(database_path, f"comprehensive_player_data_{current_datetime}.csv")
+        
+        # Extract date from tar file name instead of using current datetime
+        tar_filename = os.path.basename(self.tar_file)
+        # Extract date from format: csv-exports_backup_YYYY-MM-DD_HH-MM-SS_csv.tar.gz
+        date_match = tar_filename.split('backup_')[1].split('_csv.tar.gz')[0] if 'backup_' in tar_filename else datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        # Convert from YYYY-MM-DD_HH-MM-SS to YYYY-MM-DD_HHMMSS format
+        # date_match format: "2026-04-08_14-00-01"
+        # desired format: "2026-04-08_140001"
+        date_parts = date_match.split('_')  # ["2026-04-08", "14-00-01"]
+        date_part = date_parts[0]  # "2026-04-08"
+        time_part = date_parts[1].replace('-', '')  # "140001"
+        date_formatted = f"{date_part}_{time_part}"  # "2026-04-08_140001"
+        
+        self.output_file = os.path.join(database_path, f"comprehensive_player_data_{date_formatted}.csv")
         self.item_types_file = os.path.join(database_path, "item_types_registry.json")
         self.troop_types_file = os.path.join(database_path, "troop_types_registry.json")
         
@@ -312,6 +323,7 @@ class PlayerDataAnalyzer:
                 settlement_id = settlement.get('uuid', '')
                 settlement_name = settlement.get('name', '')
                 settlement_level = settlement.get('level', '')
+                settlement_type = settlement.get('type', '')  # 'city' or 'outpost'
                 
                 buildings = buildings_by_settlement.get(settlement_id, [])
                 settlement_buildings = []
@@ -321,7 +333,8 @@ class PlayerDataAnalyzer:
                     settlement_buildings.append(f"{building_type}:{building_level}")
                 
                 if settlement_buildings:
-                    player_buildings.append(f"{settlement_name}({settlement_level}):[{','.join(settlement_buildings)}]")
+                    # Include settlement type in the metadata to distinguish outposts from cities
+                    player_buildings.append(f"{settlement_name}({settlement_level})[{settlement_type}]:[{','.join(settlement_buildings)}]")
             
             player_data['buildings_metadata'] = '|'.join(player_buildings) if player_buildings else ''
             
