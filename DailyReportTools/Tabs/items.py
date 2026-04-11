@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import json
 
 def calculate_daily_rate(values, dates):
     """Calculate true daily rate based on time differences between reports"""
@@ -54,7 +55,7 @@ def categorize_item(item_name):
     name_lower = item_name.lower()
     
     # Chests - include all chest-related items and special packs
-    if 'chest' in name_lower or ('pack' in name_lower and any(pack_type in name_lower for pack_type in ['supreme', 'welcome'])):
+    if 'chest' in name_lower or ('pack' in name_lower and any(pack_type in name_lower for pack_type in ['supreme', 'welcome'])) or 'chronos' in name_lower:
         return "Chests"
     
     # Dragon Armor - include all dragon armor items
@@ -141,8 +142,22 @@ def create_items_tab(df):
     all_items = set()
     items_with_history = set()  # Track items that actually have data
     
+    # Always check items dictionary first (legacy format - where old format stores items)
+    for _, row in df.iterrows():
+        if 'items' in row and isinstance(row['items'], dict):
+            for item_name, quantity in row['items'].items():
+                if item_name and item_name.strip():
+                    all_items.add(item_name)
+                    # Handle both direct amount values and nested dictionaries
+                    if isinstance(quantity, (int, float)):
+                        if quantity > 0:
+                            items_with_history.add(item_name)
+                    elif isinstance(quantity, dict) and 'total_amount' in quantity:
+                        if quantity['total_amount'] > 0:
+                            items_with_history.add(item_name)
+    
     if use_comprehensive:
-        # Comprehensive CSV format - extract from raw_player_data
+        # Comprehensive CSV format - also check raw_player_data for additional items
         for _, row in df.iterrows():
             if 'raw_player_data' in row and row['raw_player_data'] is not None:
                 player_df = row['raw_player_data']
@@ -167,16 +182,6 @@ def create_items_tab(df):
                             if total_count > 0:
                                 all_items.add(item_name)
                                 items_with_history.add(item_name)
-    else:
-        # Legacy format - extract from items dictionary
-        for _, row in df.iterrows():
-            if 'items' in row and isinstance(row['items'], dict):
-                for item_name, quantity in row['items'].items():
-                    if item_name and item_name.strip():
-                        all_items.add(item_name)
-                        # Only add to items_with_history if quantity > 0
-                        if quantity > 0:
-                            items_with_history.add(item_name)
     
     # Filter out items that have never had any quantity
     valid_items = items_with_history
@@ -255,7 +260,23 @@ def create_items_tab(df):
                 # Create time series data for selected item
                 item_data = []
                 for _, row in df.iterrows():
-                    if use_comprehensive:
+                    # Legacy format - extract from items dictionary (this has aggregated values)
+                    if 'items' in row and isinstance(row['items'], dict):
+                        quantity = row['items'].get(original_name, 0)
+                        # Handle both direct amount values and nested dictionaries
+                        if isinstance(quantity, (int, float)):
+                            if quantity > 0:
+                                item_data.append({
+                                    'date': row['date'],
+                                    'quantity': quantity
+                                })
+                        elif isinstance(quantity, dict) and 'total_amount' in quantity:
+                            if quantity['total_amount'] > 0:
+                                item_data.append({
+                                    'date': row['date'],
+                                    'quantity': quantity['total_amount']
+                                })
+                    elif use_comprehensive:
                         # Comprehensive CSV format - extract from raw_player_data
                         if 'raw_player_data' in row and row['raw_player_data'] is not None:
                             player_df = row['raw_player_data']
@@ -284,15 +305,6 @@ def create_items_tab(df):
                                                 'date': row['date'],
                                                 'quantity': quantity
                                             })
-                    else:
-                        # Legacy format - extract from items dictionary
-                        if 'items' in row and isinstance(row['items'], dict):
-                            quantity = row['items'].get(original_name, 0)
-                            if quantity > 0:  # Only include if item exists and has quantity
-                                item_data.append({
-                                    'date': row['date'],
-                                    'quantity': quantity
-                                })
                 
                 if not item_data:
                     continue
@@ -385,7 +397,17 @@ def create_items_tab(df):
                 # Get latest data for each item
                 item_data = []
                 for _, row in df.iterrows():
-                    if use_comprehensive:
+                    # Legacy format - extract from items dictionary (this has aggregated values)
+                    if 'items' in row and isinstance(row['items'], dict):
+                        quantity = row['items'].get(original_name, 0)
+                        # Handle both direct amount values and nested dictionaries
+                        if isinstance(quantity, (int, float)):
+                            if quantity > 0:
+                                item_data.append(quantity)
+                        elif isinstance(quantity, dict) and 'total_amount' in quantity:
+                            if quantity['total_amount'] > 0:
+                                item_data.append(quantity['total_amount'])
+                    elif use_comprehensive:
                         # Comprehensive CSV format - extract from raw_player_data
                         if 'raw_player_data' in row and row['raw_player_data'] is not None:
                             player_df = row['raw_player_data']
@@ -408,12 +430,6 @@ def create_items_tab(df):
                                         quantity = player_df[item_col].fillna(0).sum()
                                         if quantity > 0:
                                             item_data.append(quantity)
-                    else:
-                        # Legacy format - extract from items dictionary
-                        if 'items' in row and isinstance(row['items'], dict):
-                            quantity = row['items'].get(original_name, 0)
-                            if quantity > 0:
-                                item_data.append(quantity)
                 
                 if item_data:
                     summary_data.append({

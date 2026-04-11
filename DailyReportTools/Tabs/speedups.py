@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import json
 
 def calculate_daily_rate(values, dates):
     """Calculate true daily rate based on time differences between reports"""
@@ -65,8 +66,13 @@ def create_speedups_tab(filtered_df):
         # Get all item types and find speedup items (same logic as items tab)
         all_items = set()
         
+        # Always check items dictionary first (this is where old format stores items)
+        for items in filtered_df['items']:
+            if isinstance(items, dict) and items:
+                all_items.update(items.keys())
+        
         if use_comprehensive:
-            # Comprehensive CSV format - extract from raw_player_data (same as items tab)
+            # Comprehensive CSV format - also check raw_player_data for additional items
             for _, row in filtered_df.iterrows():
                 if 'raw_player_data' in row and row['raw_player_data'] is not None:
                     player_df = row['raw_player_data']
@@ -85,11 +91,6 @@ def create_speedups_tab(filtered_df):
                             for col in item_columns:
                                 item_name = col.replace('item_', '')
                                 all_items.add(item_name)
-        else:
-            # Legacy format - extract from items dictionary
-            for items in filtered_df['items']:
-                if isinstance(items, dict) and items:
-                    all_items.update(items.keys())
         
         # Find speedup items in the data (in order of time)
         available_speedups = []
@@ -157,7 +158,18 @@ def create_speedups_tab(filtered_df):
                     values = []
                     for _, data_row in filtered_df.iterrows():
                         count = 0
-                        if use_comprehensive:
+                        # Legacy format - extract from items dictionary (this has aggregated values)
+                        if isinstance(data_row['items'], dict) and data_row['items']:
+                            for item_name, amount in data_row['items'].items():
+                                search_key = speedup_type.lower().replace(' ', '_')
+                                search_name = item_name.lower()
+                                if (search_key in search_name or speedup_type.lower() in search_name) and not any(x in search_name for x in ['_x5', '_x10', '_x15']):
+                                    # Handle both direct amount values and nested dictionaries
+                                    if isinstance(amount, (int, float)):
+                                        count += amount
+                                    elif isinstance(amount, dict) and 'total_amount' in amount:
+                                        count += amount['total_amount']
+                        elif use_comprehensive:
                             # Comprehensive CSV format - extract from raw_player_data
                             if 'raw_player_data' in data_row and data_row['raw_player_data'] is not None:
                                 player_df = data_row['raw_player_data']
@@ -184,14 +196,6 @@ def create_speedups_tab(filtered_df):
                                                 item_col = f'item_{item_name}'
                                                 if item_col in player_df.columns:
                                                     count += player_df[item_col].fillna(0).sum()
-                        else:
-                            # Legacy format - extract from items dictionary
-                            if isinstance(data_row['items'], dict) and data_row['items']:
-                                for item_name, amount in data_row['items'].items():
-                                    search_key = speedup_type.lower().replace(' ', '_')
-                                    search_name = item_name.lower()
-                                    if (search_key in search_name or speedup_type.lower() in search_name) and not any(x in search_name for x in ['_x5', '_x10', '_x15']):
-                                        count += amount
                         values.append(count)
                     
                     fig_speedups.add_trace(
@@ -215,7 +219,18 @@ def create_speedups_tab(filtered_df):
                         sorted_dates = []
                         for _, data_row in sorted_data.iterrows():
                             count = 0
-                            if use_comprehensive:
+                            # Legacy format - extract from items dictionary (this has aggregated values)
+                            if isinstance(data_row['items'], dict) and data_row['items']:
+                                for item_name, amount in data_row['items'].items():
+                                    search_key = speedup_type.lower().replace(' ', '_')
+                                    search_name = item_name.lower()
+                                    if (search_key in search_name or speedup_type.lower() in search_name) and not any(x in search_name for x in ['_x5', '_x10', '_x15']):
+                                        # Handle both direct amount values and nested dictionaries
+                                        if isinstance(amount, (int, float)):
+                                            count += amount
+                                        elif isinstance(amount, dict) and 'total_amount' in amount:
+                                            count += amount['total_amount']
+                            elif use_comprehensive:
                                 # Comprehensive CSV format - extract from raw_player_data
                                 if 'raw_player_data' in data_row and data_row['raw_player_data'] is not None:
                                     player_df = data_row['raw_player_data']
@@ -241,14 +256,6 @@ def create_speedups_tab(filtered_df):
                                                     item_col = f'item_{item_name}'
                                                     if item_col in player_df.columns:
                                                         count += player_df[item_col].fillna(0).sum()
-                            else:
-                                # Legacy format - extract from items dictionary
-                                if isinstance(data_row['items'], dict) and data_row['items']:
-                                    for item_name, amount in data_row['items'].items():
-                                        search_key = speedup_type.lower().replace(' ', '_')
-                                        search_name = item_name.lower()
-                                        if (search_key in search_name or speedup_type.lower() in search_name) and not any(x in search_name for x in ['_x5', '_x10', '_x15']):
-                                            count += amount
                             sorted_values.append(count)
                             sorted_dates.append(data_row['date'])
                         

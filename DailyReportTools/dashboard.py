@@ -20,17 +20,64 @@ def get_realm_name(realm_id):
     """Convert realm ID to realm name"""
     return 'Ruby'
 
-def get_latest_commit_message():
-    """Get the latest git commit message"""
+def get_latest_commit_version():
+    """Get version number from latest git commit message, fallback to commit hash"""
     try:
         import subprocess
+        import re
+        
+        # Get the commit message
         result = subprocess.run(['git', 'log', '-1', '--pretty=format:%B'], 
+                              capture_output=True, text=True, cwd='.')
+        if result.returncode == 0:
+            commit_message = result.stdout.strip()
+            
+            # Try to extract version number pattern (e.g., 2.4.4)
+            version_match = re.search(r'(\d+\.\d+\.\d+)', commit_message)
+            if version_match:
+                return version_match.group(1)
+        
+        # Fallback to commit hash
+        result = subprocess.run(['git', 'log', '-1', '--pretty=format:%h'], 
                               capture_output=True, text=True, cwd='.')
         if result.returncode == 0:
             return result.stdout.strip()
         return None
     except Exception:
         return None
+
+def get_commit_history():
+    """Get all commit messages with version numbers"""
+    try:
+        import subprocess
+        import re
+        
+        # Get all commit messages with full body (limit to last 50 commits)
+        # Use format that includes subject and body separated by a delimiter
+        result = subprocess.run(['git', 'log', '-50', '--pretty=format:===COMMIT_START===%s%n%b===COMMIT_END==='], 
+                              capture_output=True, text=True, cwd='.')
+        if result.returncode == 0:
+            # Split by our custom delimiter
+            commits = result.stdout.split('===COMMIT_START===')
+            
+            # Filter commits with version numbers
+            version_commits = []
+            for commit in commits:
+                if '===COMMIT_END===' in commit:
+                    # Remove the end marker
+                    message = commit.replace('===COMMIT_END===', '').strip()
+                    version_match = re.search(r'(\d+\.\d+\.\d+)', message)
+                    if version_match:
+                        version = version_match.group(1)
+                        version_commits.append({
+                            'version': version,
+                            'message': message
+                        })
+            
+            return version_commits
+        return []
+    except Exception:
+        return []
 
 def process_player_creation_dates(filtered_df):
     """Process player creation dates to generate accurate player count over time"""
@@ -164,6 +211,10 @@ def load_parsed_cache():
 
 st.set_page_config(page_title="Realm Analytics Dashboard", layout="wide")
 
+# Initialize session state for commit history view
+if 'show_commit_history' not in st.session_state:
+    st.session_state.show_commit_history = False
+
 # Load data first
 df = load_csv_files(st)
 
@@ -171,7 +222,17 @@ df = load_csv_files(st)
 col1, col2 = st.columns([3, 1])
 
 with col1:
-    st.title("🏰 Realm Analytics Dashboard")
+    version = get_latest_commit_version()
+    if version:
+        # Display title and version button inline
+        title_col, version_col = st.columns([10, 1])
+        with title_col:
+            st.markdown("### 🏰 Realm Analytics Dashboard")
+        with version_col:
+            if st.button(f"v{version}", key="version_toggle", help="Click to view version history"):
+                st.session_state.show_commit_history = not st.session_state.show_commit_history
+    else:
+        st.title("🏰 Realm Analytics Dashboard")
 
 with col2:
     if not df.empty:
@@ -185,6 +246,27 @@ with col2:
             realm_name = get_realm_name(latest_row['realm_id'])
         
         st.markdown(f"**Realm:** {realm_name}")
+
+# Show commit history page if toggled
+if st.session_state.show_commit_history:
+    st.markdown("---")
+    st.markdown("### 📜 ROA Dashboard Update History")
+    
+    commit_history = get_commit_history()
+    
+    if commit_history:
+        for commit in commit_history:
+            st.markdown(f"**Version {commit['version']}**")
+            st.markdown(commit['message'])
+            st.markdown("---")
+    else:
+        st.info("No version history found")
+    
+    if st.button("← Back to Dashboard"):
+        st.session_state.show_commit_history = False
+        st.rerun()
+    
+    st.stop()  # Stop execution here to prevent showing the rest of the dashboard
 
 if df.empty:
     st.error("No CSV files found in GitHub repository!")
@@ -212,7 +294,7 @@ else:
             realm_name = get_realm_name(latest_report['realm_id'])
         
         # Get latest commit message
-        latest_commit = get_latest_commit_message()
+        latest_commit = get_latest_commit_version()
         
         st.sidebar.markdown("### 📊 Latest Report")
         st.sidebar.markdown(f"**Database Update:** {database_date_str}")
@@ -251,7 +333,7 @@ else:
     filtered_df = process_player_creation_dates(filtered_df)
     
     # Tabs for different views
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = st.tabs(["Overview", "Player Count", "Resources", "Power", "Speedups", "Items", "Troops", "Buildings", "Skins", "Quests & Research", "Ceasefire"])
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = st.tabs(["Overview", "Player Count", "Resources", "Power", "Speedups", "Items", "Troops", "Buildings", "Skins", "Quests & Research", "Protected Resources"])
     
     with tab1:
         create_overview_tab(filtered_df)
@@ -448,47 +530,6 @@ else:
     
     with tab11:
         create_ceasefire_tab(filtered_df)
-    
-    # Data table
-    with st.expander("📋 Raw Data"):
-        # Create a copy of filtered_df to avoid modifying original
-        raw_data_df = filtered_df.copy()
-        
-        # Add resource columns
-        main_resources = ['gold', 'lumber', 'stone', 'metal', 'food', 'ruby']
-        
-        for resource in main_resources:
-            raw_data_df[f'{resource.title()}Sum'] = raw_data_df['resources'].apply(
-                lambda x: x.get(resource, 0) if isinstance(x, dict) else 0
-            )
-        
-        # Add power columns
-        raw_data_df['TotalPower'] = raw_data_df['total_power']
-        raw_data_df['AvgPowerPerPlayer'] = raw_data_df['avg_power_per_player']
-        
-        # Handle realm name/ID and create display column
-        if 'realm_name' in raw_data_df.columns:
-            raw_data_df['RealmName'] = raw_data_df['realm_name']
-        elif 'realm_id' in raw_data_df.columns:
-            raw_data_df['RealmName'] = raw_data_df['realm_id'].apply(get_realm_name)
-        else:
-            raw_data_df['RealmName'] = 'Unknown Realm'
-        
-        display_columns = ['date', 'RealmName', 'total_players', 'TotalPower', 'AvgPowerPerPlayer'] + [f'{resource.title()}Sum' for resource in main_resources]
-        
-        # Format the dataframe with commas for numbers
-        formatted_df = raw_data_df[display_columns].copy()
-        for resource in main_resources:
-            formatted_df[f'{resource.title()}Sum'] = formatted_df[f'{resource.title()}Sum'].apply(lambda x: f"{int(x):,}" if pd.notna(x) else "0")
-        
-        # Format total_players as well
-        formatted_df['total_players'] = formatted_df['total_players'].apply(lambda x: f"{int(x):,}" if pd.notna(x) else "0")
-        
-        # Format power columns
-        formatted_df['TotalPower'] = formatted_df['TotalPower'].apply(lambda x: f"{int(x):,}" if pd.notna(x) else "0")
-        formatted_df['AvgPowerPerPlayer'] = formatted_df['AvgPowerPerPlayer'].apply(lambda x: f"{int(x):,}" if pd.notna(x) else "0")
-        
-        st.dataframe(formatted_df, width='stretch')
 
 # Add cache clear button at bottom
 st.sidebar.markdown("---")

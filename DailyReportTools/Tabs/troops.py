@@ -122,6 +122,8 @@ def create_troops_tab(filtered_df):
                     troop_columns = [col for col in player_df.columns if col.startswith('troop_') and col != 'unique_troop_types']
                 
                 if troop_columns:
+                    # Filter out Great Dragon and Water Dragon from troop columns
+                    troop_columns = [col for col in troop_columns if not any(dragon in col for dragon in ['great_dragon', 'water_dragon'])]
                     
                     # Parse troop counts from JSON if available
                     if 'troops_json' in player_df.columns:
@@ -245,226 +247,198 @@ def create_troops_tab(filtered_df):
             troop_columns = [col for col in player_df.columns if col.startswith('troop_') and col != 'unique_troop_types']
         
         if troop_columns:
-            # Create checkboxes for troop selection (like resource tab)
+            # Create checkboxes for troop selection
             troop_names = [col.replace('troop_', '').replace('_', ' ').title() for col in troop_columns]
             
-            # Add resource selection toggles
-            st.markdown("**Select Troop Types to Display:**")
+            # Filter out Great Dragon and Water Dragon
+            troop_names = [t for t in troop_names if t not in ["Great Dragon", "Water Dragon"]]
             
-            # Split checkboxes into two rows to prevent name cutoff
-            mid_point = (len(troop_names) + 1) // 2
-            first_row_troops = troop_names[:mid_point]
-            second_row_troops = troop_names[mid_point:]
+            st.markdown("**Select troop types to display:**")
             
-            selected_troops_display = []
+            # Display checkboxes in columns to fill screen width (4 columns)
+            cols_per_row = 4
+            selected_troops = []
             
-            # First row of checkboxes
-            troop_cols_row1 = st.columns(len(first_row_troops))
-            for i, troop in enumerate(first_row_troops):
-                with troop_cols_row1[i]:
-                    # Default all individual troops to selected
-                    is_selected = st.checkbox(
-                        troop, 
-                        value=True,
-                        key=f"show_troop_{troop}"
-                    )
-                    if is_selected:
-                        selected_troops_display.append(troop)
-            
-            # Second row of checkboxes
-            troop_cols_row2 = st.columns(len(second_row_troops) + 1)  # +1 for Total Troops
-            for i, troop in enumerate(second_row_troops):
-                with troop_cols_row2[i]:
-                    # Default all individual troops to selected
-                    is_selected = st.checkbox(
-                        troop, 
-                        value=True,
-                        key=f"show_troop_{troop}"
-                    )
-                    if is_selected:
-                        selected_troops_display.append(troop)
-            
-            # Add Total Troops checkbox in second row
-            with troop_cols_row2[len(second_row_troops)]:
-                # Default Total Troops to not selected
-                is_total_selected = st.checkbox(
-                    "Total Troops",
-                    value=False,
-                    key="show_troop_total"
-                )
-                if is_total_selected:
-                    selected_troops_display = ["Total Troops"]
-    
-    # Collect troops data over time from all CSV files
-    troops_over_time = []
-    
-    if selected_troops_display:
-        for _, row in filtered_df.iterrows():
-            # Try to get troops_data from the row first
-            if 'troops_data' in row and row['troops_data'] and not isinstance(row['troops_data'], (int, float)):
-                troops_data = row['troops_data']
-                date = row['date']
+            for i, troop in enumerate(troop_names):
+                col_idx = i % cols_per_row
+                if i % cols_per_row == 0:
+                    cols = st.columns(cols_per_row)
                 
-                if isinstance(troops_data, dict):
-                    troop_entry = {'Date': date}
-                    
-                    # Add individual troop data - use troop names directly from troops_data keys
-                    for troop_name, troop_value in troops_data.items():
-                        # Skip non-numeric or metadata fields
-                        if isinstance(troop_value, str) or troop_name == 'unique_troop_types':
-                            continue
+                with cols[col_idx]:
+                    # Only Conscripts selected by default
+                    is_selected = st.checkbox(
+                        troop,
+                        value=(troop == "Conscript"),
+                        key=f"troop_checkbox_{troop.replace(' ', '_')}"
+                    )
+                    if is_selected:
+                        selected_troops.append(troop)
+            
+            if selected_troops:
+                # Collect troops data over time
+                troops_over_time = []
+                
+                for _, row in filtered_df.iterrows():
+                    if 'troops_data' in row and row['troops_data'] and not isinstance(row['troops_data'], (int, float)):
+                        troops_data = row['troops_data']
+                        date = row['date']
                         
-                        # Convert troop name to display format
-                        display_name = troop_name.replace('_', ' ').title()
-                        
-                        if display_name in selected_troops_display:
-                            # Handle numpy types
-                            if hasattr(troop_value, 'item'):
-                                troop_value = troop_value.item()
-                            troop_entry[display_name] = troop_value
-                    
-                    # Add total troops if selected
-                    if "Total Troops" in selected_troops_display:
-                        total_troops = 0
-                        for key, value in troops_data.items():
-                            try:
-                                if key == 'unique_troop_types' or isinstance(value, str):
+                        if isinstance(troops_data, dict):
+                            troop_entry = {'Date': date}
+                            
+                            for troop_name, troop_value in troops_data.items():
+                                if isinstance(troop_value, str) or troop_name == 'unique_troop_types':
                                     continue
-                                if hasattr(value, 'item'):
-                                    numeric_value = value.item()
-                                else:
-                                    numeric_value = value
                                 
-                                if isinstance(numeric_value, (int, float)) and not pd.isna(numeric_value) and numeric_value > 0:
-                                    total_troops += numeric_value
-                            except:
-                                continue
-                        troop_entry["Total Troops"] = total_troops
-                    
-                    troops_over_time.append(troop_entry)
+                                # Filter out Great Dragon and Water Dragon
+                                if any(dragon in troop_name.lower() for dragon in ['great_dragon', 'water_dragon']):
+                                    continue
+                                
+                                display_name = troop_name.replace('_', ' ').title()
+                                
+                                if display_name in selected_troops:
+                                    if hasattr(troop_value, 'item'):
+                                        troop_value = troop_value.item()
+                                    troop_entry[display_name] = troop_value
+                            
+                            troops_over_time.append(troop_entry)
                 
                 if troops_over_time:
                     troops_over_time_df = pd.DataFrame(troops_over_time)
                     troops_over_time_df = troops_over_time_df.sort_values('Date')
                     
                     # Create line chart
-                    fig_troops_over_time = go.Figure()
+                    fig = go.Figure()
                     
-                    for troop in selected_troops_display:
+                    for troop in selected_troops:
                         if troop in troops_over_time_df.columns:
-                            fig_troops_over_time.add_trace(
+                            fig.add_trace(
                                 go.Scatter(
                                     x=troops_over_time_df['Date'],
                                     y=troops_over_time_df[troop],
                                     mode='lines+markers',
-                                    name=troop,
-                                    line=dict(width=2)
+                                    name=troop
                                 )
                             )
                     
-                    fig_troops_over_time.update_layout(
+                    fig.update_layout(
                         title="Troop Count Over Time",
                         xaxis_title="Date",
                         yaxis_title="Number of Troops",
-                        height=400,
-                        hovermode='x unified'
+                        height=400
                     )
                     
-                    st.plotly_chart(fig_troops_over_time, use_container_width=True, key="troops_over_time_chart")
+                    st.plotly_chart(fig, use_container_width=True)
                 else:
                     st.warning("No troops data available over time")
             else:
                 st.info("Please select at least one troop type to display")
-        
-        # Top 5 Players with Largest Armies
-        st.markdown("#### Top 5 Players by Army Size")
-        
-        if 'raw_player_data' in latest_data:
-            player_df = latest_data['raw_player_data']
-            
-            # Handle case where raw_player_data might be converted to float by pandas
-            if isinstance(player_df, (int, float)) or not hasattr(player_df, 'columns'):
-                st.warning(f"Player data format error: expected DataFrame but got {type(player_df)}. Value: {player_df}")
-            else:
-                # Use total_troop_amount if available, otherwise calculate from individual troop columns
-                if 'total_troop_amount' in player_df.columns:
-                    # Convert to numeric and use directly
-                    player_df['total_troops'] = pd.to_numeric(player_df['total_troop_amount'], errors='coerce').fillna(0)
-                else:
-                    # Fallback: calculate from individual troop columns
-                    troop_columns = [col for col in player_df.columns if 'troop' in col.lower() and col != 'unique_troop_types']
-                    
-                    if troop_columns:
-                        # Convert all troop columns to numeric, coercing errors to NaN
-                        for col in troop_columns:
-                            player_df[col] = pd.to_numeric(player_df[col], errors='coerce')
-                        
-                        # Fill NaN with 0 and sum
-                        player_df['total_troops'] = player_df[troop_columns].fillna(0).sum(axis=1)
-                    else:
-                        st.warning("No troop data available")
-                        return
-                    
-                    # Get top 5 players
-                    top_players = player_df.nlargest(5, 'total_troops')
-                    
-                    if not top_players.empty:
-                        # Display top players in a table
-                        for i, (_, player) in enumerate(top_players.iterrows(), 1):
-                            # Use username if available, otherwise use account ID
-                            if 'username' in player and pd.notna(player['username']):
-                                player_name = str(player['username'])
-                            else:
-                                account_id = str(player['account_id'])[:8] + "..." if len(str(player['account_id'])) > 8 else str(player['account_id'])
-                                player_name = account_id
-                            
-                            # Extract scalar value safely
-                            total_troops_val = player['total_troops']
-                            if isinstance(total_troops_val, (pd.Series, list, tuple)):
-                                total_troops = int(total_troops_val.iloc[0] if isinstance(total_troops_val, pd.Series) else total_troops_val[0])
-                            else:
-                                total_troops = int(total_troops_val)
-                            
-                            st.markdown(f"**#{i} {player_name}** - {total_troops:,} troops")
-                            
-                            # Show troop breakdown as simple table
-                            troop_breakdown = {}
-                            troop_columns = [col for col in player_df.columns if 'troop' in col.lower() and col != 'unique_troop_types' and col != 'total_troop_amount' and col != 'total_troops']
-                            
-                            for col in troop_columns:
-                                col_value = player[col]
-                                # Extract scalar value safely
-                                if isinstance(col_value, (pd.Series, list, tuple)):
-                                    col_value = col_value.iloc[0] if isinstance(col_value, pd.Series) else col_value[0]
-                                
-                                if pd.notna(col_value) and col_value > 0:
-                                    troop_name = col.replace('troop_', '').replace('_', ' ').title()
-                                    troop_breakdown[troop_name] = int(col_value)
-                            
-                            if troop_breakdown:
-                                # Create simple table with 3 column pairs for compact display
-                                breakdown_df = pd.DataFrame(list(troop_breakdown.items()), columns=['Troop Type', 'Amount'])
-                                breakdown_df = breakdown_df.sort_values('Amount', ascending=False)
-                                
-                                # Split into 3 columns
-                                cols = st.columns(3)
-                                for j in range(3):
-                                    with cols[j]:
-                                        # Get subset of data for this column
-                                        start_idx = j * (len(breakdown_df) // 3 + 1)
-                                        end_idx = start_idx + (len(breakdown_df) // 3 + 1)
-                                        subset = breakdown_df.iloc[start_idx:end_idx]
-                                        
-                                        if not subset.empty:
-                                            st.dataframe(subset, use_container_width=True, hide_index=True)
-                            else:
-                                st.info("No troop data available for this player")
-                            
-                            st.markdown("---")
-                    else:
-                        st.warning("No troop data found for players")
-        else:
-            st.warning("Raw player data not available for detailed analysis")
     
+    # Top 10 Players with Largest Armies
+    st.markdown("#### Top 10 Players by Army Size")
+    
+    if 'raw_player_data' in latest_data:
+        player_df = latest_data['raw_player_data']
+        
+        # Handle case where raw_player_data might be converted to float by pandas
+        if isinstance(player_df, (int, float)) or not hasattr(player_df, 'columns'):
+            st.warning(f"Player data format error: expected DataFrame but got {type(player_df)}. Value: {player_df}")
+        else:
+            # Use total_troop_amount if available, otherwise calculate from individual troop columns
+            if 'total_troop_amount' in player_df.columns:
+                # Convert to numeric and use directly
+                player_df['total_troops'] = pd.to_numeric(player_df['total_troop_amount'], errors='coerce').fillna(0)
+            else:
+                # Fallback: calculate from individual troop columns
+                troop_columns = [col for col in player_df.columns if 'troop' in col.lower() and col != 'unique_troop_types']
+                
+                if troop_columns:
+                    # Convert all troop columns to numeric, coercing errors to NaN
+                    for col in troop_columns:
+                        player_df[col] = pd.to_numeric(player_df[col], errors='coerce')
+                    
+                    # Fill NaN with 0 and sum
+                    player_df['total_troops'] = player_df[troop_columns].fillna(0).sum(axis=1)
+                else:
+                    st.warning("No troop data available")
+                    return
+            
+            # Get top 10 players
+            top_players = player_df.nlargest(10, 'total_troops')
+            
+            if not top_players.empty:
+                # Create a table with players as rows and troops as columns
+                troop_data_table = []
+                
+                for i, (_, player) in enumerate(top_players.iterrows()):
+                    # Use username if available, otherwise use account ID
+                    if 'username' in player and pd.notna(player['username']):
+                        player_name = str(player['username'])
+                    else:
+                        account_id = str(player['account_id'])[:8] + "..." if len(str(player['account_id'])) > 8 else str(player['account_id'])
+                        player_name = account_id
+                    
+                    row_data = {'Player': player_name}
+                    
+                    # Check if troops_json exists and parse it
+                    if 'troops_json' in player and pd.notna(player['troops_json']):
+                        try:
+                            troops_dict = json.loads(player['troops_json'])
+                            for troop_name, troop_value in troops_dict.items():
+                                if isinstance(troop_value, (int, float)) and not isinstance(troop_value, str):
+                                    display_name = troop_name.replace('_', ' ').title()
+                                    # Filter out Great Dragon and Water Dragon
+                                    if not any(dragon in troop_name.lower() for dragon in ['great_dragon', 'water_dragon']):
+                                        row_data[display_name] = troop_value
+                        except:
+                            pass
+                    else:
+                        # Fallback to individual troop columns
+                        troop_columns = [col for col in player_df.columns if 'troop' in col.lower() and col != 'unique_troop_types' and col != 'total_troop_amount' and col != 'total_troops']
+                        for col in troop_columns:
+                            col_value = player[col]
+                            # Extract scalar value safely
+                            if isinstance(col_value, (pd.Series, list, tuple)):
+                                col_value = col_value.iloc[0] if isinstance(col_value, pd.Series) else col_value[0]
+                            
+                            # Convert to numeric if it's a string
+                            try:
+                                col_value = pd.to_numeric(col_value, errors='coerce')
+                            except:
+                                col_value = 0
+                            
+                            if pd.notna(col_value) and col_value > 0:
+                                troop_name = col.replace('troop_', '').replace('_', ' ').title()
+                                # Filter out Great Dragon and Water Dragon
+                                if not any(dragon in col.lower() for dragon in ['great_dragon', 'water_dragon']):
+                                    row_data[troop_name] = col_value
+                    
+                    # Add total troops to row
+                    total_troops_val = player['total_troops']
+                    if isinstance(total_troops_val, (pd.Series, list, tuple)):
+                        total_troops = int(total_troops_val.iloc[0] if isinstance(total_troops_val, pd.Series) else total_troops_val[0])
+                    else:
+                        total_troops = int(total_troops_val)
+                    row_data['Total'] = total_troops
+                    
+                    troop_data_table.append(row_data)
+                
+                # Create DataFrame and display
+                if troop_data_table:
+                    troops_df = pd.DataFrame(troop_data_table)
+                    troops_df = troops_df.set_index('Player')
+                    
+                    # Move Total column to the end
+                    if 'Total' in troops_df.columns:
+                        total_col = troops_df.pop('Total')
+                        troops_df['Total'] = total_col
+                    
+                    # Format all numeric columns with commas
+                    for col in troops_df.columns:
+                        troops_df[col] = troops_df[col].apply(lambda x: f"{int(x):,}" if pd.notna(x) and isinstance(x, (int, float)) else x)
+                    
+                    st.dataframe(troops_df, use_container_width=True)
+            else:
+                st.warning("No troop data found for players")
     else:
-        st.info("No data available for troop analysis")
+        st.warning("Raw player data not available for detailed analysis")

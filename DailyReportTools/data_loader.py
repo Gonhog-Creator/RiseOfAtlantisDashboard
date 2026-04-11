@@ -629,8 +629,4 @@ def load_csv_files(st, force_reload=False):
     
     df, new_parsed_count = load_csv_files_from_github()
     
-    # Show toast for new files (outside of cached function)
-    if new_parsed_count > 0:
-        st.toast(f"📊 Processed {new_parsed_count} new/updated files from GitHub", icon="✅")
-    
     return df

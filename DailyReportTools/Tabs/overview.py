@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import json
 
 def calculate_daily_rate(sorted_df, value_column):
     """Calculate true daily rate based on time differences between reports"""
@@ -305,9 +306,6 @@ def create_overview_tab(filtered_df):
             # Power Overview Section
             st.markdown("### ⚔️ Power Overview")
             
-            # Toggle for full numbers in power section
-            show_full_power = st.toggle("Show Full Numbers", key="power_full_numbers")
-            
             if not filtered_df.empty:
                 # Get latest power data
                 sorted_df = filtered_df.sort_values('date')
@@ -339,23 +337,102 @@ def create_overview_tab(filtered_df):
                         daily_avg_power_change = avg_meaningful_changes.iloc[-1] if len(avg_meaningful_changes) > 0 else 0
                 
                 # Display power metrics
-                power_col1, power_col2 = st.columns(2)
+                power_col1, power_col2, power_col3 = st.columns([1, 1, 2])
                 
                 with power_col1:
                     st.metric(
                         "⚔️ Total Power",
-                        format_number(total_power, show_full_power),
-                        format_rate(daily_power_change, show_full_power)
+                        format_number(total_power, False),
+                        format_rate(daily_power_change, False)
                     )
                 
                 with power_col2:
                     st.metric(
                         "👤 Power per Player",
-                        format_number(avg_power_per_player, show_full_power),
-                        format_rate(daily_avg_power_change, show_full_power)
+                        format_number(avg_power_per_player, False),
+                        format_rate(daily_avg_power_change, False)
                     )
+                
+                with power_col3:
+                    # Top 10 Players by Power
+                    st.markdown("**Top 10 Players**")
+                    
+                    # Get raw player data to find top power players
+                    if 'raw_player_data' in latest_data and latest_data['raw_player_data'] is not None:
+                        player_df = latest_data['raw_player_data']
+                        if isinstance(player_df, pd.DataFrame) and not player_df.empty and 'power' in player_df.columns:
+                            # Convert power to numeric and get top 10
+                            player_df['power'] = pd.to_numeric(player_df['power'], errors='coerce').fillna(0)
+                            top_power_players = player_df.nlargest(10, 'power')
+                            
+                            # Display in 2x5 grid
+                            for i in range(0, 10, 5):
+                                cols = st.columns(5)
+                                for j in range(5):
+                                    if i + j < len(top_power_players):
+                                        with cols[j]:
+                                            player = top_power_players.iloc[i + j]
+                                            player_name = player.get('username', str(player['account_id'])[:8] + "...")
+                                            power_val = int(player['power'])
+                                            st.markdown(f"**#{i + j + 1}**<br>{player_name}<br>{power_val:,}", unsafe_allow_html=True)
             else:
                 st.info("No power data available")
+            
+            st.markdown("---")
+            
+            # Dragons Section
+            st.markdown("### 🐉 Dragons")
+            
+            # Get dragon data from troops parsing
+            dragons_data = {}
+            if 'raw_player_data' in latest_data and latest_data['raw_player_data'] is not None:
+                player_df = latest_data['raw_player_data']
+                if isinstance(player_df, pd.DataFrame) and not player_df.empty:
+                    # Check if troops_json exists
+                    if 'troops_json' in player_df.columns:
+                        for _, player in player_df.iterrows():
+                            if pd.notna(player['troops_json']):
+                                try:
+                                    troops_dict = json.loads(player['troops_json'])
+                                    # Count players with Great Dragon
+                                    if 'great_dragon' in troops_dict and troops_dict['great_dragon'] > 0:
+                                        dragons_data['great_dragon'] = dragons_data.get('great_dragon', 0) + 1
+                                    # Count players with Water Dragon
+                                    if 'water_dragon' in troops_dict and troops_dict['water_dragon'] > 0:
+                                        dragons_data['water_dragon'] = dragons_data.get('water_dragon', 0) + 1
+                                except:
+                                    pass
+                    else:
+                        # Fallback to individual troop columns
+                        if 'troop_great_dragon' in player_df.columns:
+                            dragons_data['great_dragon'] = (pd.to_numeric(player_df['troop_great_dragon'], errors='coerce') > 0).sum()
+                        if 'troop_water_dragon' in player_df.columns:
+                            dragons_data['water_dragon'] = (pd.to_numeric(player_df['troop_water_dragon'], errors='coerce') > 0).sum()
+            
+            # Dragon image map
+            dragon_image_map = {
+                'great_dragon': 'great_dragon.webp',
+                'water_dragon': 'water_dragon.webp'
+            }
+            
+            dragon_names = ['great_dragon', 'water_dragon']
+            
+            # Display dragon tiles in a grid
+            cols = st.columns(len(dragon_names))
+            for i, dragon_name in enumerate(dragon_names):
+                with cols[i]:
+                    image_file = dragon_image_map.get(dragon_name, 'dragon_keep.webp')
+                    image_path = f"Images/{image_file}"
+                    
+                    try:
+                        st.image(image_path, width=70)
+                    except:
+                        st.write("🐉")
+                    
+                    display_name = dragon_name.replace('_', ' ').title()
+                    player_count = dragons_data.get(dragon_name, 0)
+                    st.markdown(f"**{display_name}**")
+                    st.metric("Players", player_count)
             
             st.markdown("---")
             st.markdown("### 📈 Speedups Overview")
