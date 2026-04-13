@@ -311,6 +311,27 @@ class PlayerDataAnalyzer:
                 amount = int(troop.get('amount', 0))
                 troop_counts[troop_type] += amount
             
+            # Add defending troops from settlements
+            settlements = settlements_by_player.get(player_id, [])
+            for settlement in settlements:
+                settlement_metadata = settlement.get('metadata', '')
+                if settlement_metadata:
+                    try:
+                        metadata_dict = json.loads(settlement_metadata)
+                        if 'defending_troops' in metadata_dict and metadata_dict['defending_troops']:
+                            for defending_troop in metadata_dict['defending_troops']:
+                                troop_type = defending_troop.get('troop_id', '')
+                                amount = int(defending_troop.get('amount', 0))
+                                if troop_type and amount > 0:
+                                    troop_counts[troop_type] += amount
+                                    # Also update totals
+                                    total_troop_amount += amount
+                    except (json.JSONDecodeError, KeyError, ValueError):
+                        pass
+            
+            # Update total troop amount after adding defending troops
+            player_data['total_troop_amount'] = total_troop_amount
+            
             # Store troops as JSON string instead of individual columns
             player_data['troops_json'] = json.dumps(dict(troop_counts))
             

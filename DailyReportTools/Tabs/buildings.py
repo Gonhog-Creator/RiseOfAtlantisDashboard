@@ -8,23 +8,30 @@ import json
 def extract_buildings_data(df):
     """Extract buildings data from comprehensive CSV format"""
     buildings_data = {}
+    
     if 'buildings_metadata' in df.columns:
         # Parse buildings metadata from comprehensive CSV format
         for _, row in df.iterrows():
             if pd.notna(row['buildings_metadata']):
                 try:
                     buildings_metadata = row['buildings_metadata']
+                    
                     # Handle both dict format and string format
                     if isinstance(buildings_metadata, str):
-                        # Handle new format with settlement type: "CityName(level)[type]:[building1:1,building2:2]"
+                        # Handle format: "CityName(level)city:[building1:1,building2:2]"
+                        # Or "CityName(level)[city]:[building1:1,building2:2]"
                         # Multiple settlements separated by '|': "Settlement1...]:[buildings]|Settlement2...]:[buildings]"
                         
                         # First split by '|' to get individual settlements
                         individual_settlements = buildings_metadata.split('|')
                         
                         for settlement_metadata in individual_settlements:
-                            # Then split by ']:[' to get settlement info and buildings
-                            settlement_parts = settlement_metadata.split(']:[')
+                            # Try splitting by ']:[' first (new format with brackets)
+                            if ']:[' in settlement_metadata:
+                                settlement_parts = settlement_metadata.split(']:[')
+                            else:
+                                # Try splitting by ':[' (format without brackets around type)
+                                settlement_parts = settlement_metadata.split(':[')
                             
                             if len(settlement_parts) >= 2:
                                 # First part has settlement name and type
@@ -32,9 +39,16 @@ def extract_buildings_data(df):
                                 # Second part has buildings
                                 buildings_str = settlement_parts[1].rstrip(']')
                                 
-                                # Extract settlement type from format "Name(level)[type]"
+                                # Extract settlement type from format "Name(level)type" or "Name(level)[type]"
                                 if '[' in settlement_info:
                                     settlement_type = settlement_info.split('[')[1].rstrip(']')
+                                elif ')' in settlement_info:
+                                    # Format: "Name(level)type"
+                                    parts = settlement_info.split(')')
+                                    if len(parts) >= 2:
+                                        settlement_type = parts[1]
+                                    else:
+                                        settlement_type = 'city'
                                 else:
                                     settlement_type = 'city'  # Default to city for old format
                                 
@@ -73,6 +87,7 @@ def extract_buildings_data(df):
                                         buildings_data[building_name]['levels'].append(level)
                 except Exception as e:
                     continue
+    
     return buildings_data
 
 def create_buildings_tab(filtered_df):
@@ -293,6 +308,11 @@ def create_buildings_tab(filtered_df):
                                         settlement_parts = buildings_metadata.split(']:[')
                                         
                                         for i, settlement_part in enumerate(settlement_parts):
+                                            # Initialize buildings_str to avoid reference before assignment
+                                            buildings_str = None
+                                            name_part = ''
+                                            settlement_type = 'city'
+                                            
                                             # First part has settlement name and type
                                             if i == 0:
                                                 # This is the first settlement (before the first ']:[')

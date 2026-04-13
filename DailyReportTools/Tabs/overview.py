@@ -179,23 +179,29 @@ def create_overview_tab(filtered_df):
                                         format_rate(daily_rate, show_full_numbers)
                                     )
                                     
-                                    # Get ceasefire protection data for this resource
-                                    protected_amount = 0
-                                    protected_percentage = 0
+                                    # Calculate unprotected resources (total - protected)
+                                    unprotected_amount = 0
+                                    unprotected_percentage = 0
                                     
                                     # Get ceasefire protection data if available from comprehensive data
                                     if 'ceasefire_data' in latest_comprehensive_data and isinstance(latest_comprehensive_data['ceasefire_data'], dict):
                                         ceasefire_info = latest_comprehensive_data['ceasefire_data'].get(resource, {})
                                         protected_amount = ceasefire_info.get('protected', 0)
-                                        protected_percentage = ceasefire_info.get('protected_percentage', 0)
+                                        total_amount = ceasefire_info.get('total', latest_amount)
+                                        unprotected_amount = total_amount - protected_amount
+                                        unprotected_percentage = (unprotected_amount / total_amount * 100) if total_amount > 0 else 0
+                                    else:
+                                        # If no ceasefire data, unprotected equals total
+                                        unprotected_amount = latest_amount
+                                        unprotected_percentage = 100.0
                                     
-                                    # Add per player amount and ceasefire protection info below metric
+                                    # Add per player amount and unprotected resources info below metric
                                     # Per player badge
                                     st.markdown(f"<div style='text-align: left; margin-top: -10px; margin-bottom: 2px;'><span style='background-color: #666; color: white; padding: 2px 8px; border-radius: 12px; font-size: 14px;'>{format_number(avg_per_player, show_full_numbers)}/player</span></div>", unsafe_allow_html=True)
                                     
-                                    # Protected badge below (only if protection exists and not ruby)
-                                    if protected_amount > 0 and resource != 'ruby':
-                                        st.markdown(f"<div style='text-align: left; margin-top: 0px;'><span style='background-color: #87CEEB; color: #333; padding: 2px 8px; border-radius: 12px; font-size: 14px;'>{format_number(protected_amount, show_full_numbers)} protected ({protected_percentage:.1f}%)</span></div>", unsafe_allow_html=True)
+                                    # Unprotected badge below (only if not ruby)
+                                    if unprotected_amount > 0 and resource != 'ruby':
+                                        st.markdown(f"<div style='text-align: left; margin-top: 0px;'><span style='background-color: #87CEEB; color: #333; padding: 2px 8px; border-radius: 12px; font-size: 14px;'>{format_number(unprotected_amount, show_full_numbers)} unprotected ({unprotected_percentage:.1f}%)</span></div>", unsafe_allow_html=True)
             
             with col2:
                 st.markdown("### 👥 Player Stats")

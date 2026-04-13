@@ -3,6 +3,8 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import re
+import json
 
 def format_number(num):
     """Format numbers with abbreviations"""
@@ -15,6 +17,97 @@ def format_number(num):
     else:
         return f"{int(num):,}"
 
+def get_storage_vault_protection(buildings_metadata):
+    """Extract storage vault level and calculate protected resources"""
+    if pd.isna(buildings_metadata) or not buildings_metadata:
+        return None
+    
+    # Parse buildings_metadata to find storage vault in any settlement
+    individual_settlements = buildings_metadata.split('|')
+    
+    for settlement_metadata in individual_settlements:
+        # Extract buildings using the new format parsing logic
+        # Try splitting by ']:[' first (new format with brackets)
+        if ']:[' in settlement_metadata:
+            settlement_parts = settlement_metadata.split(']:[')
+        else:
+            # Try splitting by ':[' (format without brackets around type)
+            settlement_parts = settlement_metadata.split(':[')
+        
+        if len(settlement_parts) >= 2:
+            # Second part has buildings
+            buildings_str = settlement_parts[1].rstrip(']')
+            
+            # Parse buildings from the string
+            if buildings_str:
+                for building in buildings_str.split(','):
+                    # Require colon separator like buildings tab for consistency
+                    if ':' in building:
+                        building_name, level = building.split(':')
+                        building_name_lower = building_name.strip().lower()
+                        if 'storage_vault' in building_name_lower:
+                            level = int(level.strip())
+                            return level
+    
+    return None
+
+def get_fangtooth_cache_protection(buildings_metadata):
+    """Extract fangtooth cache level and calculate protected respirators"""
+    if pd.isna(buildings_metadata) or not buildings_metadata:
+        return None
+    
+    # Parse buildings_metadata to find fangtooth cache in any settlement
+    individual_settlements = buildings_metadata.split('|')
+    
+    for idx, settlement_metadata in enumerate(individual_settlements):
+        # Extract buildings using the new format parsing logic
+        # Try splitting by ']:[' first (new format with brackets)
+        if ']:[' in settlement_metadata:
+            settlement_parts = settlement_metadata.split(']:[')
+        else:
+            # Try splitting by ':[' (format without brackets around type)
+            settlement_parts = settlement_metadata.split(':[')
+        
+        if len(settlement_parts) >= 2:
+            # Second part has buildings
+            buildings_str = settlement_parts[1].rstrip(']')
+            
+            # Parse buildings from the string
+            if buildings_str:
+                for building in buildings_str.split(','):
+                    # Require colon separator like buildings tab for consistency
+                    if ':' in building:
+                        building_name, level = building.split(':')
+                        building_name_lower = building_name.strip().lower()
+                        # Match fangtooth_cache with or without underscore, or fangtoothcache
+                        if 'fangtooth' in building_name_lower and 'cache' in building_name_lower:
+                            level = int(level.strip())
+                            return level
+    
+    return None
+
+def calculate_vault_protection(level):
+    """Calculate protected resources based on vault level"""
+    # Values from buildings_updated.yaml
+    vault_protection = {
+        1: {'food': 5_000_000, 'lumber': 5_000_000, 'stone': 5_000_000, 'metal': 5_000_000, 'gold': 2_000_000},
+        2: {'food': 11_000_000, 'lumber': 11_000_000, 'stone': 11_000_000, 'metal': 11_000_000, 'gold': 5_000_000},
+        3: {'food': 17_000_000, 'lumber': 17_000_000, 'stone': 17_000_000, 'metal': 17_000_000, 'gold': 8_000_000},
+        4: {'food': 23_000_000, 'lumber': 23_000_000, 'stone': 23_000_000, 'metal': 23_000_000, 'gold': 11_000_000},
+        5: {'food': 29_000_000, 'lumber': 29_000_000, 'stone': 29_000_000, 'metal': 29_000_000, 'gold': 14_000_000},
+        6: {'food': 35_000_000, 'lumber': 35_000_000, 'stone': 35_000_000, 'metal': 35_000_000, 'gold': 17_000_000},
+        7: {'food': 41_000_000, 'lumber': 41_000_000, 'stone': 41_000_000, 'metal': 41_000_000, 'gold': 20_000_000},
+        8: {'food': 47_000_000, 'lumber': 47_000_000, 'stone': 47_000_000, 'metal': 47_000_000, 'gold': 23_000_000},
+        9: {'food': 53_000_000, 'lumber': 53_000_000, 'stone': 53_000_000, 'metal': 53_000_000, 'gold': 26_000_000},
+        10: {'food': 59_000_000, 'lumber': 59_000_000, 'stone': 59_000_000, 'metal': 59_000_000, 'gold': 29_000_000},
+    }
+    return vault_protection.get(level, {'food': 0, 'lumber': 0, 'stone': 0, 'metal': 0, 'gold': 0})
+
+def calculate_cache_protection(level):
+    """Calculate protected fangtooth respirators based on cache level"""
+    # 100k per level
+    return level * 100_000
+
 def create_ceasefire_tab(filtered_df):
     """Create the Protected Resources tab with player and resource analysis"""
     
@@ -25,9 +118,10 @@ def create_ceasefire_tab(filtered_df):
         comprehensive_data = None
         comprehensive_index = -1
         
-        for i, (_, row) in enumerate(filtered_df.iterrows()):
-            if 'raw_player_data' in row and row['raw_player_data'] is not None:
-                comprehensive_data = row
+        for i in range(len(filtered_df) - 1, -1, -1):  # Iterate backwards to find latest with building data
+            data = filtered_df.iloc[i]
+            if 'raw_player_data' in data and data['raw_player_data'] is not None:
+                comprehensive_data = data
                 comprehensive_index = i
                 break
         
@@ -74,28 +168,240 @@ def create_ceasefire_tab(filtered_df):
             if col in player_data.columns:
                 total_resources += player_data[col].fillna(0).sum()
         
+        # Calculate storage vault protection
+        player_data['storage_vault_level'] = player_data['buildings_metadata'].apply(get_storage_vault_protection)
+        player_data['fangtooth_cache_level'] = player_data['buildings_metadata'].apply(get_fangtooth_cache_protection)
+        
+        # Calculate total protected resources from storage vaults
+        vault_protected_resources = {
+            'food': 0,
+            'lumber': 0,
+            'stone': 0,
+            'metal': 0,
+            'gold': 0
+        }
+        
+        for _, player in player_data.iterrows():
+            vault_level = player['storage_vault_level']
+            if vault_level:
+                protection = calculate_vault_protection(vault_level)
+                for resource in vault_protected_resources:
+                    vault_protected_resources[resource] += protection[resource]
+        
+        total_vault_protected = sum(vault_protected_resources.values())
+        
+        # Calculate fangtooth cache protection
+        total_cache_protected = 0
+        for _, player in player_data.iterrows():
+            cache_level = player['fangtooth_cache_level']
+            if cache_level:
+                total_cache_protected += calculate_cache_protection(cache_level)
+        
+        # Subtract vault protection from ceasefire protection (since they overlap)
+        total_protected_adjusted = total_protected - total_vault_protected
+        protected_resource_percentage_adjusted = (total_protected_adjusted / total_resources * 100) if total_resources > 0 else 0
+        
+        # Calculate total protected (ceasefire + vault)
+        total_protected_combined = total_protected_adjusted + total_vault_protected
+        total_protected_percentage = (total_protected_combined / total_resources * 100) if total_resources > 0 else 0
+        
         # Calculate percentage of protected resources
         protected_resource_percentage = (total_protected / total_resources * 100) if total_resources > 0 else 0
         
+        # Calculate storage vault protected percentage
+        vault_protected_percentage = (total_vault_protected / total_resources * 100) if total_resources > 0 else 0
+        
         # Display summary metrics (simplified like skins section)
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         
         with col1:
             st.metric(
-                "Players with Protection",
-                f"{protected_count:,} ({protected_percentage:.1f}%)" if total_players > 0 else f"{protected_count:,}"
+                "Total Protected",
+                f"{format_number(total_protected_combined)} ({total_protected_percentage:.1f}%)"
             )
         
         with col2:
             st.metric(
-                "Total Protected Resources",
-                f"{format_number(total_protected)} ({protected_resource_percentage:.1f}%)"
+                "Ceasefire Protected Resources",
+                f"{format_number(total_protected_adjusted)} ({protected_resource_percentage_adjusted:.1f}%)"
             )
+        
+        with col3:
+            st.metric(
+                "Storage Vault Protected",
+                f"{format_number(total_vault_protected)} ({vault_protected_percentage:.1f}%)"
+            )
+        
+        st.markdown("---")
+        
+        # Unprotected Resources Section
+        st.markdown("#### Unprotected Resources")
+        
+        # Calculate unprotected resources
+        total_unprotected = total_resources - total_protected_combined
+        unprotected_percentage = (total_unprotected / total_resources * 100) if total_resources > 0 else 0
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.metric(
+                "Total Unprotected Resources",
+                f"{format_number(total_unprotected)} ({unprotected_percentage:.1f}%)"
+            )
+        
+        with col2:
+            st.metric(
+                "Total Resources",
+                f"{format_number(total_resources)}"
+            )
+        
+        # Calculate unprotected resources by type including fangtooth respirators
+        unprotected_by_type = {}
+        for resource in ['food', 'lumber', 'stone', 'metal', 'gold']:
+            resource_col = f'resource_{resource}'
+            if resource_col in player_data.columns:
+                total_resource = player_data[resource_col].fillna(0).sum()
+                # Calculate protected amount for this resource type
+                protected_resource = vault_protected_resources.get(resource, 0)
+                # For ceasefire protected, we need to calculate proportionally
+                if total_protected_adjusted > 0:
+                    # Calculate protected from ceasefire based on proportion
+                    protected_from_ceasefire = (total_protected_adjusted / total_protected) * (total_resource - protected_resource) if total_resource > 0 else 0
+                else:
+                    protected_from_ceasefire = 0
+                total_protected_for_resource = protected_resource + protected_from_ceasefire
+                unprotected_by_type[resource] = max(0, total_resource - total_protected_for_resource)
+            else:
+                unprotected_by_type[resource] = 0
+        
+        # Calculate total fangtooth respirators
+        total_fangtooth = 0
+        if 'resource_fangtooth' in player_data.columns:
+            total_fangtooth = player_data['resource_fangtooth'].fillna(0).sum()
+        
+        # Fangtooth respirators protected by cache
+        protected_fangtooth = total_cache_protected
+        unprotected_fangtooth = max(0, total_fangtooth - protected_fangtooth)
+        
+        # Create unprotected resources table with clickable buttons
+        st.markdown("##### Unprotected Resources by Type (Click to view players)")
+        
+        resource_mapping = {
+            'Food': ('resource_food', unprotected_by_type.get('food', 0)),
+            'Lumber': ('resource_lumber', unprotected_by_type.get('lumber', 0)),
+            'Stone': ('resource_stone', unprotected_by_type.get('stone', 0)),
+            'Metal': ('resource_metal', unprotected_by_type.get('metal', 0)),
+            'Gold': ('resource_gold', unprotected_by_type.get('gold', 0)),
+            'Fangtooth Respirators': ('resource_fangtooth', unprotected_fangtooth)
+        }
+        
+        # Calculate total amounts for each resource type to get percentages
+        resource_totals = {}
+        for resource_name, (resource_col, _) in resource_mapping.items():
+            if resource_col in player_data.columns:
+                resource_totals[resource_name] = player_data[resource_col].fillna(0).sum()
+            else:
+                resource_totals[resource_name] = 0
+        
+        # Create clickable buttons for each resource
+        cols = st.columns(len(resource_mapping))
+        for i, (resource_name, (resource_col, unprotected_amount)) in enumerate(resource_mapping.items()):
+            with cols[i]:
+                button_key = f"unprotected_{resource_name.lower().replace(' ', '_')}"
+                # Calculate percentage of total for this resource
+                total_amount = resource_totals.get(resource_name, 0)
+                percentage = (unprotected_amount / total_amount * 100) if total_amount > 0 else 0
+                button_text = f"{resource_name}: {format_number(unprotected_amount)} ({percentage:.1f}%)"
+                if st.button(button_text, key=button_key, use_container_width=True):
+                    st.session_state['selected_resource'] = resource_name
+                    st.session_state['selected_resource_col'] = resource_col
+        
+        # Pre-calculate player data for all resources to optimize performance
+        # Check if cached data has the expected structure (with Ceasefire Protected field)
+        needs_recalc = False
+        if 'player_resource_data' not in st.session_state:
+            needs_recalc = True
+        else:
+            # Check if any cached entry is missing the 'Ceasefire Protected' field
+            for resource_name, data in st.session_state['player_resource_data'].items():
+                if data and 'Ceasefire Protected' not in data[0]:
+                    needs_recalc = True
+                    break
+        
+        if needs_recalc:
+            st.session_state['player_resource_data'] = {}
+            for resource_name, (resource_col, _) in resource_mapping.items():
+                if resource_col in player_data.columns:
+                    resource_data = []
+                    for _, player in player_data[player_data[resource_col].fillna(0) > 0].iterrows():
+                        username = player.get('username', 'Unknown')
+                        resource_amount = player.get(resource_col, 0)
+                        
+                        # Get coordinates from buildings_metadata
+                        coordinates = "Unknown"
+                        if 'buildings_metadata' in player and pd.notna(player['buildings_metadata']):
+                            settlements = player['buildings_metadata'].split('|')
+                            for settlement in settlements:
+                                coord_match = re.search(r'\((-?\d+),\s*(-?\d+)\)', settlement)
+                                if coord_match:
+                                    coordinates = f"({coord_match.group(1)}, {coord_match.group(2)})"
+                                    break
+                        
+                        # Check if defended (has defending troops)
+                        defended = False
+                        if 'defending_troops' in player and pd.notna(player['defending_troops']) and player['defending_troops'] > 0:
+                            defended = True
+                        elif 'troops' in player and pd.notna(player['troops']) and player['troops'] > 0:
+                            defended = True
+                        
+                        # Check if protected by ceasefire/treaty
+                        ceasefire_protected = player.get('has_protection', False)
+                        
+                        resource_data.append({
+                            'Player Name': username,
+                            'Coordinates': coordinates,
+                            f'{resource_name} Amount': int(resource_amount),
+                            'Defended': defended,
+                            'Ceasefire Protected': ceasefire_protected
+                        })
+                    
+                    # Sort by resource amount descending
+                    resource_data.sort(key=lambda x: x[f'{resource_name} Amount'], reverse=True)
+                    st.session_state['player_resource_data'][resource_name] = resource_data
+        
+        # Show modal if a resource is selected
+        if 'selected_resource' in st.session_state and st.session_state['selected_resource']:
+            selected_resource = st.session_state['selected_resource']
+            
+            # Get pre-calculated data
+            display_data = st.session_state['player_resource_data'].get(selected_resource, [])
+            
+            # Create expander with player information (modal-like)
+            with st.expander(f"📊 Players with Unprotected {selected_resource}", expanded=True):
+                if display_data:
+                    display_df = pd.DataFrame(display_data)
+                    display_df[f'{selected_resource} Amount'] = display_df[f'{selected_resource} Amount'].apply(lambda x: f"{x:,}")
+                    display_df['Defended'] = display_df['Defended'].apply(lambda x: 'Yes' if x else 'No')
+                    display_df['Ceasefire Protected'] = display_df['Ceasefire Protected'].apply(lambda x: 'Yes' if x else 'No')
+                    st.dataframe(display_df, use_container_width=True, hide_index=True)
+                else:
+                    st.info(f"No players found with {selected_resource}")
+                
+                if st.button("Close", key="close_expander"):
+                    st.session_state.pop('selected_resource', None)
+                    st.session_state.pop('selected_resource_col', None)
+                    st.rerun()
         
         st.markdown("---")
         
         # Player details table (simplified)
         st.markdown("#### Players with Attack Prevention")
+        
+        # Display players with protection metric
+        st.metric(
+            "Players with Protection",
+            f"{protected_count:,} ({protected_percentage:.1f}%)" if total_players > 0 else f"{protected_count:,}"
+        )
         
         # Prepare player data for display
         display_columns = ['username', 'power', 'resource_gold', 'resource_lumber', 'resource_stone', 'resource_metal', 'resource_food']
@@ -129,6 +435,64 @@ def create_ceasefire_tab(filtered_df):
                     player_table[resource] = player_table[resource].apply(lambda x: f"{int(x):,}" if pd.notna(x) and x != 0 else '0')
             
             st.dataframe(player_table, use_container_width=True, hide_index=True)
+        
+        st.markdown("---")
+        
+        # Storage Vault Section
+        st.markdown("#### Storage Vault Protection")
+        
+        # Calculate players with storage vaults
+        players_with_vault = player_data[player_data['storage_vault_level'].notna()].copy()
+        players_with_cache = player_data[player_data['fangtooth_cache_level'].notna()].copy()
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.metric("Players with Storage Vault", len(players_with_vault))
+        
+        with col2:
+            st.metric("Players with Fangtooth Cache", len(players_with_cache))
+        
+        # Show vault protected resources by type
+        if total_vault_protected > 0:
+            st.markdown("##### Vault Protected Resources by Type")
+            vault_cols = st.columns(5)
+            vault_resource_names = ['food', 'lumber', 'stone', 'metal', 'gold']
+            for i, resource in enumerate(vault_resource_names):
+                with vault_cols[i]:
+                    st.metric(
+                        resource.title(),
+                        format_number(vault_protected_resources[resource])
+                    )
+        
+        # Show fangtooth cache protection
+        if total_cache_protected > 0:
+            st.markdown("##### Fangtooth Cache Protection")
+            st.metric("Protected Fangtooth Respirators", format_number(total_cache_protected))
+        
+        # Show players with storage vaults
+        if not players_with_vault.empty:
+            st.markdown("##### Players with Storage Vaults")
+            vault_table = players_with_vault[['username', 'storage_vault_level', 'resource_gold', 'resource_lumber', 'resource_stone', 'resource_metal', 'resource_food']].copy()
+            vault_table = vault_table.rename(columns={
+                'username': 'Player Name',
+                'storage_vault_level': 'Vault Level',
+                'resource_gold': 'Gold',
+                'resource_lumber': 'Lumber',
+                'resource_stone': 'Stone',
+                'resource_metal': 'Metal',
+                'resource_food': 'Food'
+            })
+            
+            # Sort by vault level (descending)
+            vault_table = vault_table.sort_values('Vault Level', ascending=False)
+            
+            # Format resource columns
+            for resource in ['Gold', 'Lumber', 'Stone', 'Metal', 'Food']:
+                if resource in vault_table.columns:
+                    vault_table[resource] = vault_table[resource].apply(lambda x: f"{int(x):,}" if pd.notna(x) and x != 0 else '0')
+            
+            st.dataframe(vault_table, use_container_width=True, hide_index=True)
     
     else:
         st.info("No data available for protected resources analysis.")

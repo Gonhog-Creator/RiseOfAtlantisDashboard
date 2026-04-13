@@ -14,12 +14,6 @@ def create_troops_tab(filtered_df):
         # Check if ANY row has comprehensive data (raw_player_data)
         has_comprehensive_data = False
         comprehensive_troops_data = None
-        for _, row in filtered_df.iterrows():
-            if 'raw_player_data' in row and row['raw_player_data'] is not None:
-                if isinstance(row['raw_player_data'], pd.DataFrame):
-                    has_comprehensive_data = True
-                    comprehensive_troops_data = row['raw_player_data']
-                    break
         
         # Find the latest data with troops information (comprehensive CSV)
         latest_troop_data = None
@@ -27,7 +21,21 @@ def create_troops_tab(filtered_df):
             data = filtered_df.iloc[i]
             if 'troops_data' in data and data['troops_data'] and not isinstance(data['troops_data'], (int, float)):
                 latest_troop_data = data
+                # Also get comprehensive data from the SAME row to ensure consistency
+                if 'raw_player_data' in data and data['raw_player_data'] is not None:
+                    if isinstance(data['raw_player_data'], pd.DataFrame):
+                        has_comprehensive_data = True
+                        comprehensive_troops_data = data['raw_player_data']
                 break
+        
+        # If no troops_data found, fall back to looking for comprehensive data separately
+        if latest_troop_data is None:
+            for _, row in filtered_df.iterrows():
+                if 'raw_player_data' in row and row['raw_player_data'] is not None:
+                    if isinstance(row['raw_player_data'], pd.DataFrame):
+                        has_comprehensive_data = True
+                        comprehensive_troops_data = row['raw_player_data']
+                        break
         
         if latest_troop_data is not None:
             latest_data = latest_troop_data

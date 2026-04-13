@@ -128,6 +128,9 @@ def create_skins_tab(filtered_df):
                             'City Alpha All': 'skin_city_alpha_all-.webp',
                             'City Alpha Level 9': 'skin_city_alpha_lvl9.webp',
                             'City Founders': 'skin_city_founders.webp',
+                            'City Top 1 PvP Challenge': 'skin_city_top1_challenge_pvp_1.webp',
+                            'City Top 3 Challenge 1': 'skin_city_top3_challenge_1.webp',
+                            'Founders Avatar Border': 'skin_avatar_border_founders_small.webp',
                             'Water Pack Avatar Border': 'skin_water_pack_avatar_border.webp',
                             'Water Pack Fortress': 'skin_water_pack_fortress.webp',
                         }

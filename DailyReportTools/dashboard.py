@@ -15,6 +15,8 @@ from Tabs.buildings import create_buildings_tab
 from Tabs.skins import create_skins_tab
 from Tabs.quests_research import create_quests_research_tab
 from Tabs.ceasefire import create_ceasefire_tab
+from Tabs.map import create_map_tab
+from Tabs.alliance import create_alliance_tab
 
 def get_realm_name(realm_id):
     """Convert realm ID to realm name"""
@@ -336,7 +338,7 @@ else:
     filtered_df = process_player_creation_dates(filtered_df)
     
     # Tabs for different views
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = st.tabs(["Overview", "Player Count", "Resources", "Power", "Speedups", "Items", "Troops", "Buildings", "Skins", "Quests & Research", "Protected Resources"])
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13 = st.tabs(["Overview", "Player Count", "Resources", "Power", "Speedups", "Items", "Troops", "Buildings", "Skins", "Quests & Research", "Protected Resources", "Map", "Alliance"])
     
     with tab1:
         create_overview_tab(filtered_df)
@@ -533,6 +535,12 @@ else:
     
     with tab11:
         create_ceasefire_tab(filtered_df)
+    
+    with tab12:
+        create_map_tab(filtered_df)
+    
+    with tab13:
+        create_alliance_tab(filtered_df)
 
 # Add cache clear button at bottom
 st.sidebar.markdown("---")
