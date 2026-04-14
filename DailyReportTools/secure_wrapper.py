@@ -83,7 +83,7 @@ def login_page():
         st.write("")
         
         # Use form_submit_button which already supports Enter key
-        submit_button = st.form_submit_button("Login", use_container_width=True)
+        submit_button = st.form_submit_button("Login", width='stretch')
         
         if submit_button:
             hashed_password = hashlib.sha256(password.encode()).hexdigest()

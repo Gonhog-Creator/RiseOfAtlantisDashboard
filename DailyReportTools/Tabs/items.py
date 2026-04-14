@@ -387,7 +387,7 @@ def create_items_tab(df):
                 fig.update_yaxes(title_text="Quantity", row=(i//2)+1, col=(i%2)*2+1)
                 fig.update_yaxes(title_text="Daily Change", row=(i//2)+1, col=(i%2)*2+2)
             
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             
             # Summary statistics for selected items
             st.markdown("#### 📈 Selected Items Summary")
@@ -447,7 +447,7 @@ def create_items_tab(df):
                 summary_df['Average'] = summary_df['Average'].apply(lambda x: f"{x:.1f}")
                 summary_df['Peak'] = summary_df['Peak'].apply(lambda x: f"{int(x):,}")
                 
-                st.dataframe(summary_df, use_container_width=True)
+                st.dataframe(summary_df, width='stretch')
         
     else:
         st.empty()

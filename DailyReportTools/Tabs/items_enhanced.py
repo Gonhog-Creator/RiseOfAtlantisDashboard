@@ -234,10 +234,10 @@ def create_items_tab(df):
             yaxis_title="Total Count",
             height=400
         )
-        st.plotly_chart(fig_categories, use_container_width=True)
+        st.plotly_chart(fig_categories, width='stretch')
         
         # Category table
-        st.dataframe(category_df, use_container_width=True)
+        st.dataframe(category_df, width='stretch')
         
         # Item selection by category
         st.markdown("#### Analysis Detailed Item Analysis")
@@ -264,7 +264,7 @@ def create_items_tab(df):
                     })
                 
                 item_df = pd.DataFrame(item_data)
-                st.dataframe(item_df, use_container_width=True)
+                st.dataframe(item_df, width='stretch')
                 
                 # Top items visualization
                 top_items = item_df.head(10)
@@ -283,7 +283,7 @@ def create_items_tab(df):
                     yaxis_title="Item Name",
                     height=500
                 )
-                st.plotly_chart(fig_items, use_container_width=True)
+                st.plotly_chart(fig_items, width='stretch')
                 
                 # Individual item analysis
                 selected_item = st.selectbox(
@@ -307,7 +307,7 @@ def create_items_tab(df):
                         item_players['Account ID'] = item_players['Account ID'].str[:8] + "..."
                         item_players = item_players.sort_values('Item Count', ascending=False)
                         
-                        st.dataframe(item_players.head(20), use_container_width=True)
+                        st.dataframe(item_players.head(20), width='stretch')
                         
                         # Item distribution
                         fig_distribution = px.histogram(
@@ -317,7 +317,7 @@ def create_items_tab(df):
                             nbins=20
                         )
                         fig_distribution.update_layout(height=400)
-                        st.plotly_chart(fig_distribution, use_container_width=True)
+                        st.plotly_chart(fig_distribution, width='stretch')
                         
                         # Power correlation
                         if 'Power' in item_players.columns:
@@ -330,7 +330,7 @@ def create_items_tab(df):
                                 hover_data=['Account ID']
                             )
                             fig_power.update_layout(height=400)
-                            st.plotly_chart(fig_power, use_container_width=True)
+                            st.plotly_chart(fig_power, width='stretch')
         
         # Time series analysis (if multiple data points available)
         if len(df) > 1:
@@ -374,7 +374,7 @@ def create_items_tab(df):
                         yaxis_title="Total Count",
                         height=500
                     )
-                    st.plotly_chart(fig_trend, use_container_width=True)
+                    st.plotly_chart(fig_trend, width='stretch')
     
     else:
         # Fallback to original items tab logic for legacy format

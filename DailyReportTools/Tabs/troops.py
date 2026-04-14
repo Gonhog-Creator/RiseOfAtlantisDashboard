@@ -4,6 +4,29 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import json
+from cache_manager import cache_manager
+
+def parse_waver_troops(metadata):
+    """Parse waver troops from player metadata"""
+    if pd.isna(metadata) or not metadata:
+        return 0
+    
+    try:
+        metadata_dict = json.loads(str(metadata).replace('""', '"'))
+        if 'waver_config' in metadata_dict:
+            waver_config = metadata_dict['waver_config']
+            if 'lines' in waver_config:
+                total_waver_troops = 0
+                for line in waver_config['lines']:
+                    if 'troops' in line and 'waveAmount' in line:
+                        wave_amount = line['waveAmount']
+                        for troop in line['troops']:
+                            troop_amount = troop.get('amount', 0)
+                            total_waver_troops += troop_amount * wave_amount
+                return total_waver_troops
+        return 0
+    except (json.JSONDecodeError, AttributeError, TypeError):
+        return 0
 
 def create_troops_tab(filtered_df):
     """Create the Troops tab with troop analytics and top armies"""
@@ -11,53 +34,14 @@ def create_troops_tab(filtered_df):
     if not filtered_df.empty:
         st.markdown("### Troops Troop Analytics")
         
-        # Check if ANY row has comprehensive data (raw_player_data)
-        has_comprehensive_data = False
-        comprehensive_troops_data = None
+        # Get cached troops stats from cache manager
+        troops_data = cache_manager.get_troops_stats()
         
-        # Find the latest data with troops information (comprehensive CSV)
-        latest_troop_data = None
-        for i in range(len(filtered_df) - 1, -1, -1):  # Iterate backwards to find latest with troop data
-            data = filtered_df.iloc[i]
-            if 'troops_data' in data and data['troops_data'] and not isinstance(data['troops_data'], (int, float)):
-                latest_troop_data = data
-                # Also get comprehensive data from the SAME row to ensure consistency
-                if 'raw_player_data' in data and data['raw_player_data'] is not None:
-                    if isinstance(data['raw_player_data'], pd.DataFrame):
-                        has_comprehensive_data = True
-                        comprehensive_troops_data = data['raw_player_data']
-                break
-        
-        # If no troops_data found, fall back to looking for comprehensive data separately
-        if latest_troop_data is None:
-            for _, row in filtered_df.iterrows():
-                if 'raw_player_data' in row and row['raw_player_data'] is not None:
-                    if isinstance(row['raw_player_data'], pd.DataFrame):
-                        has_comprehensive_data = True
-                        comprehensive_troops_data = row['raw_player_data']
-                        break
-        
-        if latest_troop_data is not None:
-            latest_data = latest_troop_data
-            troops_data = latest_data['troops_data']
-        elif has_comprehensive_data and comprehensive_troops_data is not None:
-            # Use comprehensive data as fallback
-            latest_data = filtered_df.iloc[-1]  # Use latest row for metadata
-            troops_data = {}
-            # Parse troops from comprehensive data
-            if 'troops_json' in comprehensive_troops_data.columns:
-                for _, player_row in comprehensive_troops_data.iterrows():
-                    try:
-                        troops_json_str = player_row['troops_json']
-                        if pd.notna(troops_json_str) and troops_json_str:
-                            troops_dict = json.loads(troops_json_str)
-                            for troop_name, count in troops_dict.items():
-                                troops_data[troop_name] = troops_data.get(troop_name, 0) + count
-                    except:
-                        continue
-        else:
-            st.warning("No detailed troop data available. This feature requires the comprehensive CSV format.")
+        if not troops_data:
+            st.warning("No troop data found. Please ensure data is loaded.")
             return
+        
+        latest_data = filtered_df.iloc[-1]  # Use latest row for metadata
         
         # Handle case where troops_data might be converted to float by pandas
         if isinstance(troops_data, (int, float)):
@@ -90,6 +74,19 @@ def create_troops_tab(filtered_df):
                 except:
                     continue
             
+            # Add defending troops from raw_player_data
+            if 'raw_player_data' in latest_data and latest_data['raw_player_data'] is not None:
+                player_df = latest_data['raw_player_data']
+                if 'defending_troops' in player_df.columns:
+                    total_troops += player_df['defending_troops'].fillna(0).sum()
+            
+            # Add waver troops from metadata (they come back)
+            if 'raw_player_data' in latest_data and latest_data['raw_player_data'] is not None:
+                player_df = latest_data['raw_player_data']
+                if 'metadata' in player_df.columns:
+                    total_waver_troops = player_df['metadata'].apply(parse_waver_troops).sum()
+                    total_troops += total_waver_troops
+            
             # Create metrics for total troops
             col1, col2 = st.columns(2)
             
@@ -108,11 +105,12 @@ def create_troops_tab(filtered_df):
                     help="Average number of troops per player"
                 )
             
-            # Detailed troop breakdown with top 5 players for each troop type
-            if has_comprehensive_data and comprehensive_troops_data is not None:
-                st.markdown("#### Troop Type Breakdown")
-                
-                player_df = comprehensive_troops_data
+            # Detailed troop breakdown
+            st.markdown("#### Troop Type Breakdown")
+            
+            # Get comprehensive data from cache for detailed breakdown
+            if 'raw_player_data' in latest_data and latest_data['raw_player_data'] is not None:
+                player_df = latest_data['raw_player_data']
                 
                 # Get all troop columns from player data
                 if 'troops_json' in player_df.columns:
@@ -141,6 +139,13 @@ def create_troops_tab(filtered_df):
                             player_id = player_row['account_id']
                             try:
                                 troops_dict = json.loads(player_row['troops_json'])
+                                # Add defending troops to the troop counts
+                                if 'defending_troops' in player_row and pd.notna(player_row['defending_troops']):
+                                    troops_dict['defending_troops'] = player_row['defending_troops']
+                                # Add waver troops to the troop counts (they come back)
+                                waver_troops = parse_waver_troops(player_row.get('metadata'))
+                                if waver_troops > 0:
+                                    troops_dict['waver_troops'] = waver_troops
                                 player_troop_counts[player_id] = troops_dict
                             except:
                                 player_troop_counts[player_id] = {}
@@ -202,7 +207,7 @@ def create_troops_tab(filtered_df):
                                         else:
                                             account_id = str(player_data['account_id'])[:8] + "..." if len(str(player_data['account_id'])) > 8 else str(player_data['account_id'])
                                             player_identifier = account_id
-                                        troop_count = int(player_data['count'])
+                                        troop_count = int(player_data['count']) if pd.notna(player_data['count']) else 0
                                         tile_content += f"<li style='margin: 5px 0;'>{i}. {player_identifier}: {troop_count:,}</li>"
                                     tile_content += "</ul>"
                                 else:
@@ -219,7 +224,7 @@ def create_troops_tab(filtered_df):
                                             account_id = str(player['account_id'])[:8] + "..." if len(str(player['account_id'])) > 8 else str(player['account_id'])
                                             player_identifier = account_id
                                         
-                                        troop_count = int(player[troop_col])
+                                        troop_count = int(player[troop_col]) if pd.notna(player[troop_col]) else 0
                                         tile_content += f"<li style='margin: 5px 0;'>{i}. {player_identifier}: {troop_count:,}</li>"
                                     tile_content += "</ul>"
                                 else:
@@ -235,9 +240,9 @@ def create_troops_tab(filtered_df):
     # Troops Over Time Chart
     st.markdown("#### Troops Over Time")
     
-    # Get all troop types from the comprehensive data
-    if has_comprehensive_data and comprehensive_troops_data is not None:
-        player_df = comprehensive_troops_data
+    # Get comprehensive data from cache for troops over time chart
+    if 'raw_player_data' in latest_data and latest_data['raw_player_data'] is not None:
+        player_df = latest_data['raw_player_data']
         
         # Get troop columns from JSON or old format
         if 'troops_json' in player_df.columns:
@@ -336,7 +341,7 @@ def create_troops_tab(filtered_df):
                         height=400
                     )
                     
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width='stretch')
                 else:
                     st.warning("No troops data available over time")
             else:
@@ -423,7 +428,9 @@ def create_troops_tab(filtered_df):
                     
                     # Add total troops to row
                     total_troops_val = player['total_troops']
-                    if isinstance(total_troops_val, (pd.Series, list, tuple)):
+                    if pd.isna(total_troops_val):
+                        total_troops = 0
+                    elif isinstance(total_troops_val, (pd.Series, list, tuple)):
                         total_troops = int(total_troops_val.iloc[0] if isinstance(total_troops_val, pd.Series) else total_troops_val[0])
                     else:
                         total_troops = int(total_troops_val)
@@ -443,9 +450,9 @@ def create_troops_tab(filtered_df):
                     
                     # Format all numeric columns with commas
                     for col in troops_df.columns:
-                        troops_df[col] = troops_df[col].apply(lambda x: f"{int(x):,}" if pd.notna(x) and isinstance(x, (int, float)) else x)
+                        troops_df[col] = troops_df[col].apply(lambda x: f"{int(x):,}" if pd.notna(x) and isinstance(x, (int, float)) else "0")
                     
-                    st.dataframe(troops_df, use_container_width=True)
+                    st.dataframe(troops_df, width='stretch')
             else:
                 st.warning("No troop data found for players")
     else:

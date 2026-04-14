@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import re
 import json
+from cache_manager import cache_manager
 
 def format_number(num):
     """Format numbers with abbreviations"""
@@ -312,69 +313,19 @@ def create_ceasefire_tab(filtered_df):
                 total_amount = resource_totals.get(resource_name, 0)
                 percentage = (unprotected_amount / total_amount * 100) if total_amount > 0 else 0
                 button_text = f"{resource_name}: {format_number(unprotected_amount)} ({percentage:.1f}%)"
-                if st.button(button_text, key=button_key, use_container_width=True):
+                if st.button(button_text, key=button_key, width='stretch'):
                     st.session_state['selected_resource'] = resource_name
                     st.session_state['selected_resource_col'] = resource_col
         
-        # Pre-calculate player data for all resources to optimize performance
-        # Check if cached data has the expected structure (with Ceasefire Protected field)
-        needs_recalc = False
-        if 'player_resource_data' not in st.session_state:
-            needs_recalc = True
-        else:
-            # Check if any cached entry is missing the 'Ceasefire Protected' field
-            for resource_name, data in st.session_state['player_resource_data'].items():
-                if data and 'Ceasefire Protected' not in data[0]:
-                    needs_recalc = True
-                    break
-        
-        if needs_recalc:
-            st.session_state['player_resource_data'] = {}
-            for resource_name, (resource_col, _) in resource_mapping.items():
-                if resource_col in player_data.columns:
-                    resource_data = []
-                    for _, player in player_data[player_data[resource_col].fillna(0) > 0].iterrows():
-                        username = player.get('username', 'Unknown')
-                        resource_amount = player.get(resource_col, 0)
-                        
-                        # Get coordinates from buildings_metadata
-                        coordinates = "Unknown"
-                        if 'buildings_metadata' in player and pd.notna(player['buildings_metadata']):
-                            settlements = player['buildings_metadata'].split('|')
-                            for settlement in settlements:
-                                coord_match = re.search(r'\((-?\d+),\s*(-?\d+)\)', settlement)
-                                if coord_match:
-                                    coordinates = f"({coord_match.group(1)}, {coord_match.group(2)})"
-                                    break
-                        
-                        # Check if defended (has defending troops)
-                        defended = False
-                        if 'defending_troops' in player and pd.notna(player['defending_troops']) and player['defending_troops'] > 0:
-                            defended = True
-                        elif 'troops' in player and pd.notna(player['troops']) and player['troops'] > 0:
-                            defended = True
-                        
-                        # Check if protected by ceasefire/treaty
-                        ceasefire_protected = player.get('has_protection', False)
-                        
-                        resource_data.append({
-                            'Player Name': username,
-                            'Coordinates': coordinates,
-                            f'{resource_name} Amount': int(resource_amount),
-                            'Defended': defended,
-                            'Ceasefire Protected': ceasefire_protected
-                        })
-                    
-                    # Sort by resource amount descending
-                    resource_data.sort(key=lambda x: x[f'{resource_name} Amount'], reverse=True)
-                    st.session_state['player_resource_data'][resource_name] = resource_data
+        # Get cached resource data from cache manager (pre-calculated at startup)
+        cached_resource_data = cache_manager.get_resource_data()
         
         # Show modal if a resource is selected
         if 'selected_resource' in st.session_state and st.session_state['selected_resource']:
             selected_resource = st.session_state['selected_resource']
             
-            # Get pre-calculated data
-            display_data = st.session_state['player_resource_data'].get(selected_resource, [])
+            # Get cached data
+            display_data = cached_resource_data.get(selected_resource, [])
             
             # Create expander with player information (modal-like)
             with st.expander(f"📊 Players with Unprotected {selected_resource}", expanded=True):
@@ -383,7 +334,7 @@ def create_ceasefire_tab(filtered_df):
                     display_df[f'{selected_resource} Amount'] = display_df[f'{selected_resource} Amount'].apply(lambda x: f"{x:,}")
                     display_df['Defended'] = display_df['Defended'].apply(lambda x: 'Yes' if x else 'No')
                     display_df['Ceasefire Protected'] = display_df['Ceasefire Protected'].apply(lambda x: 'Yes' if x else 'No')
-                    st.dataframe(display_df, use_container_width=True, hide_index=True)
+                    st.dataframe(display_df, width='stretch', hide_index=True)
                 else:
                     st.info(f"No players found with {selected_resource}")
                 
@@ -434,7 +385,7 @@ def create_ceasefire_tab(filtered_df):
                 if resource in player_table.columns:
                     player_table[resource] = player_table[resource].apply(lambda x: f"{int(x):,}" if pd.notna(x) and x != 0 else '0')
             
-            st.dataframe(player_table, use_container_width=True, hide_index=True)
+            st.dataframe(player_table, width='stretch', hide_index=True)
         
         st.markdown("---")
         
@@ -469,30 +420,6 @@ def create_ceasefire_tab(filtered_df):
         if total_cache_protected > 0:
             st.markdown("##### Fangtooth Cache Protection")
             st.metric("Protected Fangtooth Respirators", format_number(total_cache_protected))
-        
-        # Show players with storage vaults
-        if not players_with_vault.empty:
-            st.markdown("##### Players with Storage Vaults")
-            vault_table = players_with_vault[['username', 'storage_vault_level', 'resource_gold', 'resource_lumber', 'resource_stone', 'resource_metal', 'resource_food']].copy()
-            vault_table = vault_table.rename(columns={
-                'username': 'Player Name',
-                'storage_vault_level': 'Vault Level',
-                'resource_gold': 'Gold',
-                'resource_lumber': 'Lumber',
-                'resource_stone': 'Stone',
-                'resource_metal': 'Metal',
-                'resource_food': 'Food'
-            })
-            
-            # Sort by vault level (descending)
-            vault_table = vault_table.sort_values('Vault Level', ascending=False)
-            
-            # Format resource columns
-            for resource in ['Gold', 'Lumber', 'Stone', 'Metal', 'Food']:
-                if resource in vault_table.columns:
-                    vault_table[resource] = vault_table[resource].apply(lambda x: f"{int(x):,}" if pd.notna(x) and x != 0 else '0')
-            
-            st.dataframe(vault_table, use_container_width=True, hide_index=True)
     
     else:
         st.info("No data available for protected resources analysis.")

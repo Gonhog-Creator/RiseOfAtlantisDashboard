@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import json
 import os
+from cache_manager import cache_manager
 
 def format_number(num):
     """Format numbers with abbreviations"""
@@ -87,6 +88,25 @@ def calculate_alliance_stats(player_df):
         elif 'defending_troops' in alliance_players.columns:
             total_troops = alliance_players['defending_troops'].fillna(0).sum()
         
+        # Add waver troops from metadata (they come back)
+        if 'metadata' in alliance_players.columns:
+            for _, player in alliance_players.iterrows():
+                if pd.notna(player['metadata']):
+                    try:
+                        metadata_dict = json.loads(str(player['metadata']).replace('""', '"'))
+                        if 'waver_config' in metadata_dict:
+                            waver_config = metadata_dict['waver_config']
+                            if 'lines' in waver_config:
+                                for line in waver_config['lines']:
+                                    if 'troops' in line and 'waveAmount' in line:
+                                        wave_amount = line['waveAmount']
+                                        for troop in line['troops']:
+                                            troop_amount = troop.get('amount', 0)
+                                            if isinstance(troop_amount, (int, float)) and not pd.isna(troop_amount):
+                                                total_troops += troop_amount * wave_amount
+                    except:
+                        continue
+        
         # Calculate total resources
         resource_columns = ['resource_gold', 'resource_lumber', 'resource_stone', 'resource_metal', 'resource_food']
         total_resources = {}
@@ -109,58 +129,21 @@ def create_alliance_tab(filtered_df):
     if not filtered_df.empty:
         st.markdown("### Alliance Analytics")
         
-        # Find the latest data with comprehensive CSV format
-        latest_data = None
-        for i in range(len(filtered_df) - 1, -1, -1):
-            data = filtered_df.iloc[i]
-            if 'raw_player_data' in data and data['raw_player_data'] is not None:
-                latest_data = data
-                break
-        
-        if latest_data is None:
-            st.warning("No comprehensive CSV data found. This feature requires comprehensive CSV format.")
-            return
-        
-        player_df = latest_data['raw_player_data']
-        
-        if 'alliance_name' not in player_df.columns:
-            st.warning("Alliance data not available in current report format.")
-            return
-        
-        # Create a cache key based on the data source (date + player count)
-        cache_key = f"alliance_stats_{latest_data.get('date', 'unknown')}_{len(player_df)}"
-        
-        # Check if we have cached stats for this data
-        if 'alliance_stats_cache' in st.session_state and st.session_state['alliance_stats_cache']['key'] == cache_key:
-            current_stats = st.session_state['alliance_stats_cache']['stats']
-        else:
-            # Calculate alliance statistics for current data
-            current_stats = calculate_alliance_stats(player_df)
-            # Cache the results
-            st.session_state['alliance_stats_cache'] = {
-                'key': cache_key,
-                'stats': current_stats
-            }
+        # Get cached alliance stats from cache manager
+        current_stats = cache_manager.get_all_alliance_stats()
         
         if not current_stats:
-            st.warning("No alliance data found.")
+            st.warning("No alliance data found. Please ensure data is loaded.")
             return
         
-        # Calculate alliance statistics for previous day (for daily gains)
-        previous_stats = None
-        for i in range(len(filtered_df) - 2, -1, -1):
-            data = filtered_df.iloc[i]
-            if 'raw_player_data' in data and data['raw_player_data'] is not None:
-                previous_player_df = data['raw_player_data']
-                previous_stats = calculate_alliance_stats(previous_player_df)
-                break
+        # Get alliance names from cache
+        alliance_names = sorted(current_stats.keys())
         
         # Initialize favorite alliances from file
         if 'favorite_alliances' not in st.session_state:
             st.session_state['favorite_alliances'] = load_favorite_alliances()
         
         # Create alliance selection dropdown with favorites at top
-        alliance_names = sorted(current_stats.keys())
         
         # Prepend favorites to the dropdown list with star prefix
         dropdown_options = []
@@ -208,19 +191,8 @@ def create_alliance_tab(filtered_df):
                         else:
                             st.warning("Maximum 5 favorites allowed")
             
-            # Calculate daily gains if previous data exists
+            # Daily gains not implemented with cache manager yet
             daily_gains = {}
-            if previous_stats and selected_alliance in previous_stats:
-                prev_data = previous_stats[selected_alliance]
-                daily_gains['members'] = current_data['total_members'] - prev_data['total_members']
-                daily_gains['power'] = current_data['total_power'] - prev_data['total_power']
-                daily_gains['troops'] = current_data['total_troops'] - prev_data['total_troops']
-                
-                for resource in current_data['total_resources']:
-                    daily_gains[resource] = current_data['total_resources'][resource] - prev_data['total_resources'].get(resource, 0)
-            
-            # Display alliance name
-            st.markdown(f"#### {selected_alliance}")
             
             # Display metrics
             col1, col2, col3 = st.columns(3)
@@ -265,43 +237,85 @@ def create_alliance_tab(filtered_df):
             
             st.markdown("---")
             
-            # Show alliance member list
+            # Show alliance member list using cached player lookup
             st.markdown(f"#### Alliance Members ({current_data['total_members']})")
             
-            alliance_members = player_df[player_df['alliance_name'] == selected_alliance].copy()
+            # Get player IDs from cached alliance stats
+            player_ids = current_data.get('player_ids', [])
             
-            # Prepare member data for display
-            display_columns = ['username', 'power', 'resource_gold', 'resource_lumber', 'resource_stone', 'resource_metal', 'resource_food']
-            available_columns = [col for col in display_columns if col in alliance_members.columns]
+            # Build member list from cache
+            member_list = []
+            for player_id in player_ids:
+                player_data = cache_manager.get_player_data(player_id)
+                if player_data:
+                    member_list.append(player_data)
             
-            if available_columns:
-                member_table = alliance_members[available_columns].copy()
+            if member_list:
+                # Convert to DataFrame
+                member_df = pd.DataFrame(member_list)
                 
-                # Sort by power (descending)
-                member_table = member_table.sort_values('power', ascending=False)
+                # Prepare member data for display
+                display_columns = ['username', 'power', 'troops_json', 'resource_gold', 'resource_lumber', 'resource_stone', 'resource_metal', 'resource_food']
+                available_columns = [col for col in display_columns if col in member_df.columns]
                 
-                # Rename columns for better display
-                column_rename_map = {
-                    'username': 'Player Name',
-                    'power': 'Power',
-                    'resource_gold': 'Gold',
-                    'resource_lumber': 'Lumber',
-                    'resource_stone': 'Stone',
-                    'resource_metal': 'Metal',
-                    'resource_food': 'Food'
-                }
-                
-                member_table = member_table.rename(columns=column_rename_map)
-                
-                # Format power and resource columns
-                if 'Power' in member_table.columns:
-                    member_table['Power'] = member_table['Power'].apply(lambda x: f"{x:,}" if pd.notna(x) else '0')
-                
-                for resource in ['Gold', 'Lumber', 'Stone', 'Metal', 'Food']:
-                    if resource in member_table.columns:
-                        member_table[resource] = member_table[resource].apply(lambda x: f"{int(x):,}" if pd.notna(x) and x != 0 else '0')
-                
-                st.dataframe(member_table, use_container_width=True, hide_index=True)
+                if available_columns:
+                    member_table = member_df[available_columns].copy()
+                    
+                    # Calculate troops count from troops_json if available
+                    if 'troops_json' in member_table.columns:
+                        def calculate_troops(troops_json):
+                            if pd.isna(troops_json):
+                                return 0
+                            try:
+                                troops_dict = json.loads(troops_json)
+                                total = 0
+                                for troop_name, count in troops_dict.items():
+                                    if isinstance(count, str):
+                                        continue
+                                    if hasattr(count, 'item'):
+                                        numeric_count = count.item()
+                                    else:
+                                        numeric_count = count
+                                    if isinstance(numeric_count, (int, float)) and not pd.isna(numeric_count):
+                                        total += numeric_count
+                                return total
+                            except:
+                                return 0
+                        member_table['Troops'] = member_table['troops_json'].apply(calculate_troops)
+                        display_columns = ['username', 'power', 'Troops', 'resource_gold', 'resource_lumber', 'resource_stone', 'resource_metal', 'resource_food']
+                        available_columns = [col for col in display_columns if col in member_table.columns]
+                        member_table = member_table[available_columns].copy()
+                    
+                    # Sort by power (descending)
+                    member_table = member_table.sort_values('power', ascending=False)
+                    
+                    # Rename columns for better display
+                    column_rename_map = {
+                        'username': 'Player Name',
+                        'power': 'Power',
+                        'troops_json': 'Troops',
+                        'Troops': 'Troops',
+                        'resource_gold': 'Gold',
+                        'resource_lumber': 'Lumber',
+                        'resource_stone': 'Stone',
+                        'resource_metal': 'Metal',
+                        'resource_food': 'Food'
+                    }
+                    
+                    member_table = member_table.rename(columns=column_rename_map)
+                    
+                    # Format power, troops, and resource columns
+                    if 'Power' in member_table.columns:
+                        member_table['Power'] = member_table['Power'].apply(lambda x: f"{int(x):,}" if pd.notna(x) else '0')
+                    
+                    if 'Troops' in member_table.columns:
+                        member_table['Troops'] = member_table['Troops'].apply(lambda x: f"{int(x):,}" if pd.notna(x) else '0')
+                    
+                    for resource in ['Gold', 'Lumber', 'Stone', 'Metal', 'Food']:
+                        if resource in member_table.columns:
+                            member_table[resource] = member_table[resource].apply(lambda x: f"{int(x):,}" if pd.notna(x) and x != 0 else '0')
+                    
+                    st.dataframe(member_table, width='stretch', hide_index=True)
     
     else:
         st.info("No data available for alliance analysis")

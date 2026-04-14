@@ -51,6 +51,7 @@ def create_speedups_tab(filtered_df):
             'Blitz': '4 days',
             'Testronius Dust': '15%',
             'Testronius Powder': '30%',
+            'Testronius Deluxe': '50%',
             'Testronius Infusion': '99%'
         }
         
@@ -127,6 +128,7 @@ def create_speedups_tab(filtered_df):
                     'Blast': '#FF69B4',     # Hot Pink
                     'Testronius Powder': '#FFA500',   # Orange
                     'Testronius Dust': '#9400D3',  # Violet
+                    'Testronius Deluxe': '#FFD700',   # Gold
                     'Testronius Infusion': '#00CED1'   # Dark Turquoise
                 }
                 
@@ -306,6 +308,6 @@ def create_speedups_tab(filtered_df):
                             row=row, col=col
                         )
                 
-                st.plotly_chart(fig_speedups, use_container_width=True)
+                st.plotly_chart(fig_speedups, width='stretch')
         else:
             st.info("No speedup items found in the data.")

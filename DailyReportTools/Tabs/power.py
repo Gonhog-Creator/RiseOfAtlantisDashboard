@@ -182,7 +182,7 @@ def create_power_tab(filtered_df):
                         fig_buckets.update_traces(
                             hovertemplate='<b>%{x}</b><br>Players: %{y}<br>Percentage: %{customdata[0]:.1f}%<br>Total Power: %{customdata[1]:,}<extra></extra>'
                         )
-                        st.plotly_chart(fig_buckets, use_container_width=True)
+                        st.plotly_chart(fig_buckets, width='stretch')
                         
                         # Bucket details table
                         bucket_display_df = bucket_df.copy()
@@ -194,7 +194,7 @@ def create_power_tab(filtered_df):
                         bucket_display_df['Total Power'] = bucket_display_df['Total Power'].apply(lambda x: f"{int(x):,}")
                         bucket_display_df['Percentage'] = bucket_display_df['Percentage'].apply(lambda x: f"{x:.1f}%")
                         bucket_display_df.columns = ['Power Range', 'Players', '% of Total Playerbase', 'Total Power', '% of Total Power']
-                        st.dataframe(bucket_display_df, use_container_width=True)
+                        st.dataframe(bucket_display_df, width='stretch')
         
         # Top 10 Players by Power
         st.markdown("#### Top 10 Players by Power")
@@ -322,7 +322,7 @@ def create_power_tab(filtered_df):
         fig_power.update_yaxes(title_text="Total Power", row=1, col=1)
         fig_power.update_yaxes(title_text="Daily Change", row=1, col=2)
         
-        st.plotly_chart(fig_power, use_container_width=True)
+        st.plotly_chart(fig_power, width='stretch')
         
         # Player Growth Chart (if comprehensive data available)
         if 'raw_player_data' in latest_data and len(filtered_df) > 1:
@@ -380,7 +380,7 @@ def create_power_tab(filtered_df):
                         yaxis_title="Power",
                         height=500
                     )
-                    st.plotly_chart(fig_individual, use_container_width=True)
+                    st.plotly_chart(fig_individual, width='stretch')
         
         # Data Table
         st.markdown("---")

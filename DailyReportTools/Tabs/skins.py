@@ -163,7 +163,7 @@ def create_skins_tab(filtered_df):
                         
                         # Display skin distribution table
                         st.markdown("#### Table Skin Popularity Rankings")
-                        st.dataframe(skins_df, use_container_width=True)
+                        st.dataframe(skins_df, width='stretch')
                         
                         # Create visualizations
                         st.markdown("#### Trends Skin Distribution Charts")
@@ -182,7 +182,7 @@ def create_skins_tab(filtered_df):
                             yaxis_title="Number of Players",
                             height=500
                         )
-                        st.plotly_chart(fig_top_skins, use_container_width=True)
+                        st.plotly_chart(fig_top_skins, width='stretch')
                         
                         # Percentage distribution pie chart
                         if len(skins_df) <= 10:  # Only show pie chart if not too many skins
@@ -194,7 +194,7 @@ def create_skins_tab(filtered_df):
                                 hole=0.3
                             )
                             fig_pie.update_layout(height=500)
-                            st.plotly_chart(fig_pie, use_container_width=True)
+                            st.plotly_chart(fig_pie, width='stretch')
                         else:
                             # Show top 10 in pie chart
                             fig_pie = px.pie(
@@ -205,7 +205,7 @@ def create_skins_tab(filtered_df):
                                 hole=0.3
                             )
                             fig_pie.update_layout(height=500)
-                            st.plotly_chart(fig_pie, use_container_width=True)
+                            st.plotly_chart(fig_pie, width='stretch')
                         
                         # Detailed skin analysis
                         st.markdown("#### Detailed Skin Analysis")
@@ -265,7 +265,7 @@ def create_skins_tab(filtered_df):
                                 # Create display copy with formatted Power
                                 display_df = skin_df.copy()
                                 display_df['Power'] = display_df['Power'].apply(lambda x: f"{x:,}")
-                                st.dataframe(display_df, use_container_width=True)
+                                st.dataframe(display_df, width='stretch')
                                 
                                 # Power distribution for this skin (use numeric Power)
                                 if 'Power' in skin_df.columns and skin_df['Power'].sum() > 0:
@@ -276,7 +276,7 @@ def create_skins_tab(filtered_df):
                                         nbins=20
                                     )
                                     fig_power.update_layout(height=400)
-                                    st.plotly_chart(fig_power, use_container_width=True)
+                                    st.plotly_chart(fig_power, width='stretch')
                             else:
                                 st.warning(f"No players found with {selected_skin}")
                     

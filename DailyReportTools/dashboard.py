@@ -17,6 +17,8 @@ from Tabs.quests_research import create_quests_research_tab
 from Tabs.ceasefire import create_ceasefire_tab
 from Tabs.map import create_map_tab
 from Tabs.alliance import create_alliance_tab
+from Tabs.pdd import create_pdd_tab
+from cache_manager import cache_manager
 
 def get_realm_name(realm_id):
     """Convert realm ID to realm name"""
@@ -337,8 +339,11 @@ else:
     # Process player creation dates for accurate player counts
     filtered_df = process_player_creation_dates(filtered_df)
     
+    # Initialize cache manager with filtered data
+    cache_manager.initialize_cache(filtered_df)
+    
     # Tabs for different views
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13 = st.tabs(["Overview", "Player Count", "Resources", "Power", "Speedups", "Items", "Troops", "Buildings", "Skins", "Quests & Research", "Protected Resources", "Map", "Alliance"])
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14 = st.tabs(["Overview", "Player Count", "Resources", "Power", "Speedups", "Items", "Troops", "Buildings", "Skins", "Quests & Research", "Protected Resources", "Map", "Alliance", "PDD"])
     
     with tab1:
         create_overview_tab(filtered_df)
@@ -501,7 +506,7 @@ else:
                             yaxis_title="Total Players",
                             hovermode='x unified'
                         )
-                        st.plotly_chart(fig_players, use_container_width=True)
+                        st.plotly_chart(fig_players, width='stretch')
                     else:
                         st.warning("No valid player creation dates found in the latest comprehensive data file")
                 else:
@@ -541,12 +546,23 @@ else:
     
     with tab13:
         create_alliance_tab(filtered_df)
+    
+    with tab14:
+        create_pdd_tab(filtered_df)
 
 # Add cache clear button at bottom
 st.sidebar.markdown("---")
 if st.sidebar.button("🔄 Sync from GitHub"):
+    # Invalidate cache manager cache
+    cache_manager.invalidate_cache()
     # Reload data with force_reload=True
     st.cache_data.clear()
     df = load_csv_files(st, force_reload=True)
     st.success("Syncing from GitHub...")
+    st.rerun()
+
+if st.sidebar.button("🗑️ Clear Cache"):
+    # Manually clear cache
+    cache_manager.invalidate_cache()
+    st.success("Cache cleared successfully!")
     st.rerun()

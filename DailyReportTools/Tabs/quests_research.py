@@ -141,7 +141,7 @@ def create_quests_research_tab(filtered_df):
                                 color_discrete_sequence=['lightblue']
                             )
                             fig.update_layout(height=300)
-                            st.plotly_chart(fig, use_container_width=True)
+                            st.plotly_chart(fig, width='stretch')
                 
                 # Player progress analysis
                     st.markdown("#### Player Progress Analysis")
@@ -173,7 +173,7 @@ def create_quests_research_tab(filtered_df):
                                 progress_df = progress_df.sort_values('Total Progress', ascending=False)
                         
                         # Display top players
-                        st.dataframe(progress_df.head(20), use_container_width=True)
+                        st.dataframe(progress_df.head(20), width='stretch')
                     
                     # Detailed quest analysis (if quest details are available)
                     if 'quest_details' in player_df.columns:
@@ -235,7 +235,7 @@ def create_quests_research_tab(filtered_df):
                             if quest_summary:
                                 summary_df = pd.DataFrame(quest_summary)
                                 summary_df = summary_df.sort_values('Completion Rate', ascending=False)
-                                st.dataframe(summary_df, use_container_width=True)
+                                st.dataframe(summary_df, width='stretch')
                             
                             # Individual quest analysis
                             selected_quest = st.selectbox(
@@ -248,7 +248,7 @@ def create_quests_research_tab(filtered_df):
                                 quest_players = quests_df[quests_df['Quest'] == selected_quest]
                                 
                                 st.markdown(f"##### \ud83d\udc65 Players - {selected_quest}")
-                                st.dataframe(quest_players, use_container_width=True)
+                                st.dataframe(quest_players, width='stretch')
                                 
                                 # Status distribution for this quest
                                 status_counts = quest_status_counts[selected_quest]
@@ -257,7 +257,7 @@ def create_quests_research_tab(filtered_df):
                                     names=list(status_counts.keys()),
                                     title=f"{selected_quest} Status Distribution"
                                 )
-                                st.plotly_chart(fig_quest, use_container_width=True)
+                                st.plotly_chart(fig_quest, width='stretch')
                         else:
                             st.info("No detailed quest information available")
                     
@@ -316,7 +316,7 @@ def create_quests_research_tab(filtered_df):
                             if research_summary:
                                 summary_df = pd.DataFrame(research_summary)
                                 summary_df = summary_df.sort_values('Completion Rate', ascending=False)
-                                st.dataframe(summary_df, use_container_width=True)
+                                st.dataframe(summary_df, width='stretch')
                         else:
                             st.info("No detailed research information available")
                     
@@ -335,7 +335,7 @@ def create_quests_research_tab(filtered_df):
                                 hover_data=['account_id']
                             )
                             fig_quests_power.update_layout(height=400)
-                            st.plotly_chart(fig_quests_power, use_container_width=True)
+                            st.plotly_chart(fig_quests_power, width='stretch')
                         
                         if 'completed_research_count' in available_columns:
                             fig_research_power = px.scatter(
@@ -347,7 +347,7 @@ def create_quests_research_tab(filtered_df):
                                 hover_data=['account_id']
                             )
                             fig_research_power.update_layout(height=400)
-                            st.plotly_chart(fig_research_power, use_container_width=True)
+                            st.plotly_chart(fig_research_power, width='stretch')
                     else:
                         st.info("\u26a0\ufe0f No quests or research data available. This feature requires the comprehensive CSV format with quest and research information.")
             

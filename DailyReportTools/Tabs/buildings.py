@@ -4,6 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import json
+from cache_manager import cache_manager
 
 def extract_buildings_data(df):
     """Extract buildings data from comprehensive CSV format"""
@@ -96,30 +97,14 @@ def create_buildings_tab(filtered_df):
     if not filtered_df.empty:
         st.markdown("### Buildings Building Analytics")
         
-        # Find the latest data with buildings information (comprehensive CSV)
-        latest_buildings_data = None
-        for i in range(len(filtered_df) - 1, -1, -1):  # Iterate backwards to find latest with building data
-            data = filtered_df.iloc[i]
-            if 'raw_player_data' in data and data['raw_player_data'] is not None:
-                latest_buildings_data = data
-                break
+        # Get cached building stats from cache manager
+        buildings_data = cache_manager.get_building_stats()
         
-        if latest_buildings_data is None:
-            st.warning("No comprehensive CSV data found. This feature requires comprehensive CSV format.")
+        if not buildings_data:
+            st.warning("No building data found. Please ensure data is loaded.")
             return
         
-        latest_data = latest_buildings_data
-        
-        # Extract buildings data from raw player data
-        buildings_data = {}
-        if 'raw_player_data' in latest_data:
-            player_df = latest_data['raw_player_data']
-            if isinstance(player_df, pd.DataFrame) and not player_df.empty:
-                buildings_data = extract_buildings_data(player_df)
-            else:
-                st.warning(f"Raw player data is not a valid DataFrame: {type(player_df)}")
-        else:
-            st.warning("No raw_player_data found in latest data. This feature requires the comprehensive CSV format.")
+        latest_data = filtered_df.iloc[-1]  # Use latest row for metadata
         
         if buildings_data:
             
@@ -243,182 +228,7 @@ def create_buildings_tab(filtered_df):
                                 yaxis_title="Number of Buildings",
                                 height=400
                             )
-                            st.plotly_chart(fig_level, use_container_width=True)
-        
-        # Individual Player Building Analysis
-        st.markdown("---")
-        st.markdown("### 🏗️ Individual Player Building Analysis")
-        
-        if 'raw_player_data' in latest_data:
-            player_df = latest_data['raw_player_data']
-            
-            if isinstance(player_df, pd.DataFrame) and not player_df.empty:
-                # Create player selection dropdown
-                player_options = []
-                if 'username' in player_df.columns:
-                    player_options = [(f"{row['username']} ({row['account_id'][:8]}...)", row['account_id']) 
-                                     for _, row in player_df.iterrows() 
-                                     if pd.notna(row.get('username'))]
-                else:
-                    player_options = [(f"{row['account_id'][:8]}...", row['account_id']) 
-                                     for _, row in player_df.iterrows()]
-                
-                if player_options:
-                    player_options.sort(key=lambda x: x[0])
-                    selected_player = st.selectbox(
-                        "Select a player to view their buildings:",
-                        options=[option[0] for option in player_options]
-                    )
-                    
-                    if selected_player:
-                        # Get the selected player's account ID
-                        selected_account_id = next(option[1] for option in player_options if option[0] == selected_player)
-                        
-                        # Get the selected player's data
-                        player_row = player_df[player_df['account_id'] == selected_account_id]
-                        
-                        if not player_row.empty:
-                            player_data = player_row.iloc[0]
-                            
-                            # Display player info
-                            col1, col2, col3 = st.columns(3)
-                            
-                            with col1:
-                                player_name = player_data.get('username', selected_account_id[:8] + "...")
-                                st.metric("Player", player_name)
-                            with col2:
-                                alliance = player_data.get('alliance_name', 'None')
-                                st.metric("Alliance", alliance)
-                            with col3:
-                                power = player_data.get('power', 0)
-                                st.metric("Power", f"{int(power):,}")
-                            
-                            # Parse buildings metadata
-                            buildings_metadata = player_data.get('buildings_metadata')
-                            
-                            if pd.notna(buildings_metadata):
-                                try:
-                                    # Parse all buildings for this player
-                                    player_buildings = []
-                                    
-                                    if isinstance(buildings_metadata, str):
-                                        # Handle new format with settlement type: "CityName(level)[type]:[building1:1,building2:2]"
-                                        # Or old format: "CityName(level):[building1:1,building2:2]"
-                                        # Split by ']:[' to get individual settlements
-                                        settlement_parts = buildings_metadata.split(']:[')
-                                        
-                                        for i, settlement_part in enumerate(settlement_parts):
-                                            # Initialize buildings_str to avoid reference before assignment
-                                            buildings_str = None
-                                            name_part = ''
-                                            settlement_type = 'city'
-                                            
-                                            # First part has settlement name and type
-                                            if i == 0:
-                                                # This is the first settlement (before the first ']:[')
-                                                # Check if it contains the new format with [type]
-                                                if '[' in settlement_part:
-                                                    # New format: "CityName(level)[type]"
-                                                    name_part = settlement_part.split('[')[0]
-                                                    settlement_type = settlement_part.split('[')[1].rstrip(']')
-                                                else:
-                                                    # Old format: "CityName(level)"
-                                                    name_part = settlement_part
-                                                    settlement_type = 'city'  # Default to city for old format
-                                                
-                                                # Get the buildings from the next part
-                                                if i + 1 < len(settlement_parts):
-                                                    buildings_str = settlement_parts[i + 1].rstrip(']')
-                                            else:
-                                                # This is a buildings list from previous settlement
-                                                buildings_str = settlement_part.rstrip(']')
-                                                # Get next settlement name if available
-                                                if i + 1 < len(settlement_parts):
-                                                    next_part = settlement_parts[i + 1]
-                                                    if '[' in next_part:
-                                                        name_part = next_part.split('[')[0]
-                                                        settlement_type = next_part.split('[')[1].rstrip(']')
-                                                    else:
-                                                        name_part = next_part
-                                                        settlement_type = 'city'
-                                            
-                                            # Parse buildings from the string
-                                            if buildings_str:
-                                                for building in buildings_str.split(','):
-                                                    if ':' in building:
-                                                        building_name, level = building.split(':')
-                                                        building_name = building_name.strip()
-                                                        level = int(level.strip())
-                                                        
-                                                        # Skip fortresses in outposts (they don't have fortresses)
-                                                        if settlement_type == 'outpost' and building_name == 'fortress':
-                                                            continue
-                                                        
-                                                        player_buildings.append({
-                                                            'City': f"{name_part} ({settlement_type})",
-                                                            'Building': building_name.replace('_', ' ').title(),
-                                                            'Level': level
-                                                        })
-                                    elif isinstance(buildings_metadata, dict):
-                                        # Handle dict format
-                                        for city_name, city_info in buildings_metadata.items():
-                                            if ':' in city_info:
-                                                buildings_str = city_info.split(':')[1].strip('[]')
-                                                for building in buildings_str.split(','):
-                                                    if ':' in building:
-                                                        building_name, level = building.split(':')
-                                                        building_name = building_name.strip()
-                                                        level = int(level.strip())
-                                                        
-                                                        player_buildings.append({
-                                                            'City': city_name,
-                                                            'Building': building_name.replace('_', ' ').title(),
-                                                            'Level': level
-                                                        })
-                                    
-                                    if player_buildings:
-                                        # Display buildings in a table
-                                        buildings_df = pd.DataFrame(player_buildings)
-                                        
-                                        # Group by building type and show summary
-                                        st.markdown("#### Building Summary")
-                                        building_summary = buildings_df.groupby('Building').agg({
-                                            'Level': ['count']
-                                        }).reset_index()
-                                        building_summary.columns = ['Building', 'Count']
-                                        building_summary = building_summary.sort_values('Count', ascending=False)
-                                        
-                                        st.dataframe(building_summary, use_container_width=True)
-                                        
-                                        # Show building level distribution chart
-                                        st.markdown("#### Building Level Distribution")
-                                        level_dist = buildings_df.groupby('Level').size().reset_index(name='Count')
-                                        level_dist = level_dist.sort_values('Level')
-                                        
-                                        fig_player_buildings = px.bar(
-                                            level_dist,
-                                            x='Level',
-                                            y='Count',
-                                            title=f"Building Level Distribution for {player_name}",
-                                            color='Count',
-                                            color_continuous_scale='viridis'
-                                        )
-                                        fig_player_buildings.update_layout(
-                                            xaxis_title="Building Level",
-                                            yaxis_title="Number of Buildings",
-                                            height=400
-                                        )
-                                        st.plotly_chart(fig_player_buildings, use_container_width=True)
-                                    else:
-                                        st.warning("No buildings found for this player")
-                                except Exception as e:
-                                    st.error(f"Error parsing buildings data: {e}")
-                            else:
-                                st.warning("No buildings data available for this player")
-                else:
-                    st.warning("No players available for selection")
-        else:
-            st.info("Player data not available for individual building analysis")
+                            st.plotly_chart(fig_level, width='stretch')
     
     else:
         st.info("No data available for building analysis")

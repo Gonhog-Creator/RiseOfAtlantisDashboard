@@ -258,4 +258,4 @@ def create_map_tab(filtered_df):
             showlegend=True
         ))
         
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')

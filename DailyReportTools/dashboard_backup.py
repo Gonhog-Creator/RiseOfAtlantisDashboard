@@ -619,7 +619,7 @@ else:
                 yaxis_title="Total Players",
                 hovermode='x unified'
             )
-            st.plotly_chart(fig_players, use_container_width=True)
+            st.plotly_chart(fig_players, width='stretch')
     
     with tab3:
         create_resources_tab(filtered_df)

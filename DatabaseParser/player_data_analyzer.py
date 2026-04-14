@@ -313,6 +313,7 @@ class PlayerDataAnalyzer:
             
             # Add defending troops from settlements
             settlements = settlements_by_player.get(player_id, [])
+            defending_troops_list = []
             for settlement in settlements:
                 settlement_metadata = settlement.get('metadata', '')
                 if settlement_metadata:
@@ -326,6 +327,8 @@ class PlayerDataAnalyzer:
                                     troop_counts[troop_type] += amount
                                     # Also update totals
                                     total_troop_amount += amount
+                                    # Add to defending troops list for metadata
+                                    defending_troops_list.append({'troop_id': troop_type, 'amount': amount})
                     except (json.JSONDecodeError, KeyError, ValueError):
                         pass
             
@@ -334,6 +337,22 @@ class PlayerDataAnalyzer:
             
             # Store troops as JSON string instead of individual columns
             player_data['troops_json'] = json.dumps(dict(troop_counts))
+            
+            # Add defending troops to player metadata for accessibility
+            if defending_troops_list:
+                # Parse existing metadata if present
+                existing_metadata = player.get('metadata', '')
+                if existing_metadata:
+                    try:
+                        metadata_dict = json.loads(existing_metadata.replace('""', '"'))
+                    except (json.JSONDecodeError, TypeError):
+                        metadata_dict = {}
+                else:
+                    metadata_dict = {}
+                
+                # Add defending troops to metadata
+                metadata_dict['defending_troops'] = defending_troops_list
+                player_data['metadata'] = json.dumps(metadata_dict)
             
             # Process resources
             resources = resources_by_player.get(player_id, [])
