@@ -379,6 +379,9 @@ def parse_single_file(file_source, filename=None):
             with open(file_source, 'r', encoding='utf-8') as f:
                 content = f.read()
         
+        # Extract just the basename if filename includes directory path (from GitHub)
+        filename = os.path.basename(filename)
+        
         # Extract date from filename (handle both formats)
         parts = filename.split("_")
         

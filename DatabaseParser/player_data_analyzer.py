@@ -10,6 +10,7 @@ import csv
 import os
 import json
 import shutil
+import hashlib
 from collections import defaultdict
 from datetime import datetime
 
@@ -35,9 +36,93 @@ class PlayerDataAnalyzer:
         self.item_types_file = os.path.join(database_path, "item_types_registry.json")
         self.troop_types_file = os.path.join(database_path, "troop_types_registry.json")
         
+    def validate_tar_integrity(self, tar_file):
+        """Validate tar.gz file integrity using checksum"""
+        try:
+            # Calculate MD5 checksum of tar.gz file
+            hash_md5 = hashlib.md5()
+            with open(tar_file, "rb") as f:
+                for chunk in iter(lambda: f.read(4096), b""):
+                    hash_md5.update(chunk)
+            file_hash = hash_md5.hexdigest()
+            file_size = os.path.getsize(tar_file)
+            
+            print(f"Tar.gz integrity check: Size={file_size:,} bytes, MD5={file_hash[:16]}...")
+            
+            # Basic validation: file should be at least 1MB
+            if file_size < 1024 * 1024:
+                raise ValueError(f"Tar.gz file too small: {file_size} bytes (expected > 1MB)")
+            
+            return True
+        except Exception as e:
+            raise ValueError(f"Tar.gz integrity check failed: {e}")
+    
+    def validate_extraction(self):
+        """Validate that all expected CSV files were extracted"""
+        expected_csv_files = [
+            'player.csv',
+            'item.csv',
+            'troop.csv',
+            'resource.csv',
+            'building.csv',
+            'settlement.csv'
+        ]
+        
+        missing_files = []
+        for csv_file in expected_csv_files:
+            file_path = os.path.join(self.extract_path, csv_file)
+            if not os.path.exists(file_path):
+                missing_files.append(csv_file)
+            else:
+                # Check file is not empty
+                if os.path.getsize(file_path) == 0:
+                    missing_files.append(f"{csv_file} (empty)")
+        
+        if missing_files:
+            raise ValueError(f"Missing or empty CSV files after extraction: {missing_files}")
+        
+        print(f"Extraction validation passed: all {len(expected_csv_files)} critical files present")
+        return True
+    
+    def validate_critical_data(self, data):
+        """Validate that critical data exists before processing"""
+        critical_files = ['player', 'resource', 'item', 'troop']
+        missing_data = []
+        
+        for file_key in critical_files:
+            if not data.get(file_key):
+                missing_data.append(file_key)
+            elif len(data[file_key]) == 0:
+                missing_data.append(f"{file_key} (empty)")
+        
+        if missing_data:
+            raise ValueError(f"Critical data missing or empty: {missing_data}")
+        
+        # Validate minimum player count
+        player_count = len(data.get('player', []))
+        if player_count < 100:
+            raise ValueError(f"Player count too low: {player_count} (expected > 100)")
+        
+        print(f"Critical data validation passed: {player_count} players, all required data present")
+        return True
+    
+    def validate_output_size(self, output_file, min_size_mb=3.0):
+        """Validate output CSV file size is reasonable"""
+        file_size = os.path.getsize(output_file)
+        min_size_bytes = min_size_mb * 1024 * 1024
+        
+        if file_size < min_size_bytes:
+            raise ValueError(f"Output file too small: {file_size:,} bytes (expected > {min_size_bytes:,} bytes)")
+        
+        print(f"Output size validation passed: {file_size:,} bytes")
+        return True
+    
     def extract_tar_file(self, tar_file):
-        """Extract the tar file to extract_path"""
+        """Extract the tar file to extract_path with validation"""
         print(f"Extracting {tar_file}...")
+        
+        # Validate tar.gz integrity before extraction
+        self.validate_tar_integrity(tar_file)
         
         if os.path.exists(self.extract_path):
             import shutil
@@ -47,6 +132,9 @@ class PlayerDataAnalyzer:
         
         with tarfile.open(tar_file, 'r:gz') as tar:
             tar.extractall(path=self.extract_path)
+        
+        # Validate extraction succeeded
+        self.validate_extraction()
         
         print(f"Extracted to {self.extract_path}")
     
@@ -135,15 +223,31 @@ class PlayerDataAnalyzer:
         
         return registry, updated
     
-    def cleanup_extracted_files(self):
-        """Clean up extracted CSV files"""
+    def cleanup_extracted_files(self, keep_on_error=False):
+        """Clean up extracted CSV files, optionally keeping them on error for debugging"""
         # Clean up the extracted_data subdirectory
         if os.path.exists(self.extract_path):
-            try:
-                shutil.rmtree(self.extract_path)
-                print(f"Cleaned up extracted files from {self.extract_path}")
-            except Exception as e:
-                print(f"Error cleaning up extracted files: {e}")
+            if keep_on_error:
+                # Rename to preserve for debugging
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                debug_path = os.path.join(self.database_path, f"extracted_data_debug_{timestamp}")
+                try:
+                    shutil.move(self.extract_path, debug_path)
+                    print(f"Preserved extracted files for debugging at {debug_path}")
+                except Exception as e:
+                    print(f"Error preserving extracted files: {e}")
+                    # Fall back to normal cleanup
+                    try:
+                        shutil.rmtree(self.extract_path)
+                        print(f"Cleaned up extracted files from {self.extract_path}")
+                    except Exception as e2:
+                        print(f"Error cleaning up extracted files: {e2}")
+            else:
+                try:
+                    shutil.rmtree(self.extract_path)
+                    print(f"Cleaned up extracted files from {self.extract_path}")
+                except Exception as e:
+                    print(f"Error cleaning up extracted files: {e}")
         
         # Also clean up any CSV files that might have been extracted to the database path
         # (excluding the comprehensive output files and registry files)
@@ -187,12 +291,15 @@ class PlayerDataAnalyzer:
         return groups
     
     def process_player_data(self, data):
-        """Process and consolidate all player data"""
+        """Process and consolidate all player data with validation"""
         print("Processing player data...")
         
         if not data.get('player'):
             print("No player data found!")
             return [], [], []
+        
+        # Validate critical data before processing
+        self.validate_critical_data(data)
         
         # Load existing registries
         item_registry = self.load_type_registry(self.item_types_file)
@@ -642,10 +749,14 @@ class PlayerDataAnalyzer:
         return comprehensive_data, item_registry, troop_registry
     
     def write_csv(self, data, filename):
-        """Write data to CSV file"""
+        """Write data to CSV file with validation"""
         if not data:
             print("No data to write!")
             return
+        
+        # Validate minimum row count
+        if len(data) < 100:
+            raise ValueError(f"Data row count too low: {len(data)} (expected > 100)")
         
         # Get all possible field names
         fieldnames = set()
@@ -664,6 +775,9 @@ class PlayerDataAnalyzer:
             for row in data:
                 row['parser_version'] = PARSER_VERSION
             writer.writerows(data)
+        
+        # Validate output file size
+        self.validate_output_size(filename, min_size_mb=3.0)
         
         print(f"CSV written to {filename} with {len(data)} rows and {len(fieldnames)} columns (parser version {PARSER_VERSION})")
         return fieldnames
@@ -811,12 +925,16 @@ class PlayerDataAnalyzer:
             self.regenerate_all_comprehensive_csvs(self.database_path)
             print("Regeneration complete, proceeding with normal processing...")
         
+        successful_files = []
+        failed_files = []
+        
         for tar_file in self.tar_files:
             print(f"\n{'='*60}")
             print(f"Processing: {os.path.basename(tar_file)}")
             print(f"{'='*60}")
             
             output_file = self.get_output_filename(tar_file)
+            processing_error = None
             
             try:
                 # Extract tar file
@@ -829,8 +947,7 @@ class PlayerDataAnalyzer:
                 comprehensive_data, item_registry, troop_registry = self.process_player_data(data)
                 
                 if not comprehensive_data:
-                    print("No data to process!")
-                    continue
+                    raise ValueError("No data to process!")
                 
                 # Save to CSV
                 fieldnames = self.write_csv(comprehensive_data, output_file)
@@ -844,13 +961,29 @@ class PlayerDataAnalyzer:
                 print(f"Item types registered: {len(item_registry)}")
                 print(f"Troop types registered: {len(troop_registry)}")
                 
+                successful_files.append(os.path.basename(tar_file))
+                
+            except Exception as e:
+                processing_error = str(e)
+                print(f"ERROR processing {os.path.basename(tar_file)}: {e}")
+                failed_files.append((os.path.basename(tar_file), processing_error))
+                
             finally:
-                # Always clean up extracted files
-                self.cleanup_extracted_files()
+                # Clean up extracted files, preserving them on error
+                self.cleanup_extracted_files(keep_on_error=(processing_error is not None))
         
         print(f"\n{'='*60}")
         print(f"Processed {len(self.tar_files)} tar file(s)")
+        print(f"Successful: {len(successful_files)}")
+        print(f"Failed: {len(failed_files)}")
         print(f"{'='*60}")
+        
+        if failed_files:
+            print("\nFailed files:")
+            for filename, error in failed_files:
+                print(f"  - {filename}: {error}")
+        
+        return len(failed_files) == 0
 
 if __name__ == "__main__":
     # Get the directory where this script is located
@@ -858,4 +991,8 @@ if __name__ == "__main__":
     
     # Create analyzer and run
     analyzer = PlayerDataAnalyzer(script_dir)
-    analyzer.generate_comprehensive_csv()
+    success = analyzer.generate_comprehensive_csv()
+    
+    # Exit with error code if any files failed
+    import sys
+    sys.exit(0 if success else 1)
