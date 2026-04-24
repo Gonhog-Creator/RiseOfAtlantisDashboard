@@ -135,8 +135,8 @@ def create_skins_tab(filtered_df):
                             'Founders Avatar Border': 'skin_avatar_border_founders_small.webp',
                             'Water Pack Avatar Border': 'skin_water_pack_avatar_border.webp',
                             'Water Pack Fortress': 'skin_water_pack_fortress.webp',
-                            'City Hanami': 'skin_city_hanami.webp',
-                            'Hanami Avatar Border': 'skin_avatar_border_hanami_small.webp',
+                            'City Hanami': 'city_hanami.webp',
+                            'Hanami Avatar Border': 'avatar_border_hanami.webp',
                         }
                         
                         # Sort skins by player count

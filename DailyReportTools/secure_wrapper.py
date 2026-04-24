@@ -245,7 +245,6 @@ def load_csv_files():
     
     # Fallback to remote if local is empty
     if GITHUB_TOKEN and CSV_REPO_URL:
-        st.sidebar.info("Local files empty, loading from remote repository...")
         success = load_csv_from_github()
         
         if success:
