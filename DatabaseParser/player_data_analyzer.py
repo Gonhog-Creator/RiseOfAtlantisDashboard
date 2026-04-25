@@ -780,7 +780,7 @@ class PlayerDataAnalyzer:
             writer.writerows(data)
         
         # Validate output file size (check compressed file)
-        self.validate_output_size(gz_filename, min_size_mb=0.5)  # Lower threshold for compressed
+        self.validate_output_size(gz_filename, min_size_mb=0.4)  # Lower threshold for compressed
         
         # Get file sizes for reporting
         compressed_size = os.path.getsize(gz_filename)

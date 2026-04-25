@@ -384,6 +384,10 @@ def parse_single_file(file_source, filename=None):
         # Extract just the basename if filename includes directory path (from GitHub)
         filename = os.path.basename(filename)
         
+        # Remove .gz extension if present for old/new format files
+        if filename.endswith('.gz'):
+            filename = filename[:-3]
+        
         # Extract date from filename (handle both formats)
         parts = filename.split("_")
         
@@ -466,7 +470,6 @@ def parse_single_file(file_source, filename=None):
         # Silently skip parsing errors to avoid sidebar clutter
         return None
 
-@st.cache_data(ttl=3600)  # Cache for 1 hour
 def load_csv_files_from_github():
     """Load CSV files directly from GitHub API (no local files)"""
     try:
@@ -553,77 +556,102 @@ def load_csv_files_from_github():
         new_parsed_count = 0
         all_data = []
         
-        # Show progress bar
-        progress_bar = st.progress(0, text="Loading CSV files from GitHub...")
-        status_text = st.empty()
-        
-        # Separate cached and uncached files
-        files_to_download = []
-        for file_info in csv_files:
-            filename = file_info['name']
-            if filename in memory_cache:
-                all_data.append(memory_cache[filename]['data'])
-            else:
-                files_to_download.append(file_info)
-        
-        if files_to_download:
-            status_text.text(f"📥 Downloading {len(files_to_download)} files in parallel...")
+        # Use st.status to control the loading display
+        with st.status("🏰 Loading Realm Data...", expanded=True) as status:
+            st.markdown("""
+            <div style='text-align: center; padding: 10px;'>
+                <div style='font-size: 40px; line-height: 1.2;'>
+                    ⚔️ 📊 🗡️
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
             
-            def download_and_parse_file(file_info):
-                """Download and parse a single file"""
-                download_url = file_info.get('download_url')
-                if not download_url:
-                    return None, file_info['name'], "No download URL"
-                
+            # Separate cached and uncached files
+            files_to_download = []
+            for file_info in csv_files:
                 filename = file_info['name']
-                
-                try:
-                    csv_response = requests.get(download_url, headers=headers)
-                    if csv_response.status_code != 200:
-                        return None, filename, f"Download failed: {csv_response.status_code}"
-                    
-                    # Check if file is compressed
-                    if filename.endswith('.gz'):
-                        csv_content = StringIO(gzip.decompress(csv_response.content).decode('utf-8'))
-                    else:
-                        csv_content = StringIO(csv_response.text)
-                    
-                    parsed_data = parse_single_file(csv_content, filename)
-                    return parsed_data, filename, None
-                except Exception as e:
-                    return None, filename, str(e)
+                if filename in memory_cache:
+                    all_data.append(memory_cache[filename]['data'])
+                else:
+                    files_to_download.append(file_info)
             
-            # Download files in parallel using ThreadPoolExecutor
-            completed_count = 0
-            with ThreadPoolExecutor(max_workers=5) as executor:
-                future_to_file = {
-                    executor.submit(download_and_parse_file, file_info): file_info 
-                    for file_info in files_to_download
-                }
+            if files_to_download:
+                # Overall progress bar
+                overall_progress = st.progress(0)
+                status_text = st.empty()
                 
-                for future in as_completed(future_to_file):
-                    completed_count += 1
-                    progress = completed_count / len(files_to_download)
-                    progress_bar.progress(progress, text=f"Loading {completed_count}/{len(files_to_download)} files...")
+                # Recent activity display (show last 5 files)
+                recent_activity = st.empty()
+                
+                def download_and_parse_file(file_info):
+                    """Download and parse a single file"""
+                    download_url = file_info.get('download_url')
+                    if not download_url:
+                        return None, file_info['name'], "No download URL"
                     
-                    parsed_data, filename, error = future.result()
+                    filename = file_info['name']
+                    short_name = filename.split('/')[-1]
                     
-                    if error:
-                        status_text.text(f"❌ Error: {filename} - {error}")
-                        continue
+                    try:
+                        csv_response = requests.get(download_url, headers=headers)
+                        if csv_response.status_code != 200:
+                            return None, filename, f"Download failed: {csv_response.status_code}"
+                        
+                        # Check if file is compressed
+                        if filename.endswith('.gz'):
+                            csv_content = StringIO(gzip.decompress(csv_response.content).decode('utf-8'))
+                        else:
+                            csv_content = StringIO(csv_response.text)
+                        
+                        parsed_data = parse_single_file(csv_content, filename)
+                        return parsed_data, filename, None
+                    except Exception as e:
+                        return None, filename, str(e)
+                
+                # Download files in parallel using ThreadPoolExecutor
+                completed_count = 0
+                recent_files = []
+                
+                with ThreadPoolExecutor(max_workers=50) as executor:
+                    future_to_file = {
+                        executor.submit(download_and_parse_file, file_info): file_info 
+                        for file_info in files_to_download
+                    }
                     
-                    if parsed_data:
-                        memory_cache[filename] = {'data': parsed_data}
-                        all_data.append(parsed_data)
-                        new_parsed_count += 1
-                        status_text.text(f"✅ Loaded: {filename}")
-        
-        status_text.text(f"✅ Loaded {len(all_data)} files total ({new_parsed_count} new)")
-        
-        
-        # Clear progress indicators
-        progress_bar.empty()
-        status_text.empty()
+                    for future in as_completed(future_to_file):
+                        completed_count += 1
+                        progress = completed_count / len(files_to_download)
+                        overall_progress.progress(progress)
+                        status_text.markdown(f"**Progress: {completed_count}/{len(files_to_download)} files ({progress:.1%})**")
+                        
+                        parsed_data, filename, error = future.result()
+                        short_name = filename.split('/')[-1]
+                        
+                        if error:
+                            recent_files.insert(0, f"❌ {short_name} - {error}")
+                        elif parsed_data:
+                            memory_cache[filename] = {'data': parsed_data}
+                            all_data.append(parsed_data)
+                            new_parsed_count += 1
+                            recent_files.insert(0, f"✅ {short_name}")
+                        else:
+                            recent_files.insert(0, f"⚠️ {short_name} - No data")
+                        
+                        # Show last 5 recent activities
+                        recent_display = recent_files[:5]
+                        recent_activity.markdown("**Recent Activity:**\n" + "\n".join(f"• {f}" for f in recent_display))
+                
+                # Overall completion message
+                st.markdown(f"### ✅ Loaded {len(all_data)} files total ({new_parsed_count} new)")
+                
+                # Clear all loading indicators
+                overall_progress.empty()
+                status_text.empty()
+                recent_activity.empty()
+                status.empty()  # Remove the status container completely
+            else:
+                st.success(f"✅ All {len(all_data)} files loaded from cache!")
+                status.empty()  # Remove the status container completely
     
     except Exception as e:
         st.error(f"❌ Error loading from GitHub: {e}")
