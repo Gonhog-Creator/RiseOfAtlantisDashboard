@@ -7,6 +7,7 @@ import gzip
 from datetime import datetime
 import requests
 from io import StringIO
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 def calculate_daily_rate(values, dates):
     """Calculate true daily rate based on time differences between reports"""
@@ -532,7 +533,7 @@ def load_csv_files_from_github():
         
         # Check root directory for CSV files (backward compatibility)
         for f in files:
-            if f.get('name', '').endswith('.csv') and f.get('type') == 'file':
+            if (f.get('name', '').endswith('.csv') or f.get('name', '').endswith('.csv.gz')) and f.get('type') == 'file':
                 csv_files.append(f)
             elif f.get('type') == 'dir':
                 # Check if this looks like a monthly directory (contains digits)
@@ -556,52 +557,69 @@ def load_csv_files_from_github():
         progress_bar = st.progress(0, text="Loading CSV files from GitHub...")
         status_text = st.empty()
         
-        for idx, file_info in enumerate(csv_files):
-            try:
-                progress = (idx + 1) / len(csv_files)
-                progress_bar.progress(progress, text=f"Loading file {idx + 1} of {len(csv_files)}: {file_info.get('name', 'unknown')}")
-                
+        # Separate cached and uncached files
+        files_to_download = []
+        for file_info in csv_files:
+            filename = file_info['name']
+            if filename in memory_cache:
+                all_data.append(memory_cache[filename]['data'])
+            else:
+                files_to_download.append(file_info)
+        
+        if files_to_download:
+            status_text.text(f"📥 Downloading {len(files_to_download)} files in parallel...")
+            
+            def download_and_parse_file(file_info):
+                """Download and parse a single file"""
                 download_url = file_info.get('download_url')
                 if not download_url:
-                    continue
+                    return None, file_info['name'], "No download URL"
                 
                 filename = file_info['name']
                 
-                # Check if file is in memory cache
-                if filename in memory_cache:
-                    # Use cached data from memory
-                    all_data.append(memory_cache[filename]['data'])
-                    status_text.text(f"✅ Using cached: {filename}")
-                else:
-                    # Need to download and parse this file
-                    status_text.text(f"⬇️ Downloading: {filename}")
+                try:
                     csv_response = requests.get(download_url, headers=headers)
+                    if csv_response.status_code != 200:
+                        return None, filename, f"Download failed: {csv_response.status_code}"
                     
-                    if csv_response.status_code == 200:
-                        status_text.text(f"📊 Parsing: {filename}")
-                        # Check if file is compressed
-                        if filename.endswith('.gz'):
-                            # Decompress gzip content
-                            csv_content = StringIO(gzip.decompress(csv_response.content).decode('utf-8'))
-                        else:
-                            # Parse CSV content directly from memory
-                            csv_content = StringIO(csv_response.text)
-                        parsed_data = parse_single_file(csv_content, filename)
-                        
-                        if parsed_data:
-                            # Store in memory cache
-                            memory_cache[filename] = {
-                                'data': parsed_data
-                            }
-                            all_data.append(parsed_data)
-                            new_parsed_count += 1
-                            status_text.text(f"✅ Loaded: {filename}")
+                    # Check if file is compressed
+                    if filename.endswith('.gz'):
+                        csv_content = StringIO(gzip.decompress(csv_response.content).decode('utf-8'))
                     else:
-                        status_text.text(f"❌ Failed to download: {filename}")
-                        
-            except Exception as e:
-                status_text.text(f"⚠️ Error processing {file_info.get('name', 'unknown')}: {e}")
-                continue
+                        csv_content = StringIO(csv_response.text)
+                    
+                    parsed_data = parse_single_file(csv_content, filename)
+                    return parsed_data, filename, None
+                except Exception as e:
+                    return None, filename, str(e)
+            
+            # Download files in parallel using ThreadPoolExecutor
+            completed_count = 0
+            with ThreadPoolExecutor(max_workers=5) as executor:
+                future_to_file = {
+                    executor.submit(download_and_parse_file, file_info): file_info 
+                    for file_info in files_to_download
+                }
+                
+                for future in as_completed(future_to_file):
+                    completed_count += 1
+                    progress = completed_count / len(files_to_download)
+                    progress_bar.progress(progress, text=f"Loading {completed_count}/{len(files_to_download)} files...")
+                    
+                    parsed_data, filename, error = future.result()
+                    
+                    if error:
+                        status_text.text(f"❌ Error: {filename} - {error}")
+                        continue
+                    
+                    if parsed_data:
+                        memory_cache[filename] = {'data': parsed_data}
+                        all_data.append(parsed_data)
+                        new_parsed_count += 1
+                        status_text.text(f"✅ Loaded: {filename}")
+        
+        status_text.text(f"✅ Loaded {len(all_data)} files total ({new_parsed_count} new)")
+        
         
         # Clear progress indicators
         progress_bar.empty()
@@ -655,7 +673,7 @@ def get_csv_files_from_directory(dir_path, owner, repo, github_token, headers):
         csv_files = []
         
         for f in files:
-            if f.get('name', '').endswith('.csv') and f.get('type') == 'file':
+            if (f.get('name', '').endswith('.csv') or f.get('name', '').endswith('.csv.gz')) and f.get('type') == 'file':
                 # Store the full path in the name for identification
                 f_with_path = f.copy()
                 # Ensure dir_path is a string
