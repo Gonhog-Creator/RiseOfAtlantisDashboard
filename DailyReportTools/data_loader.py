@@ -556,15 +556,21 @@ def load_csv_files_from_github():
         new_parsed_count = 0
         all_data = []
         
-        # Use st.status to control the loading display
-        with st.status("🏰 Loading Realm Data...", expanded=True) as status:
-            st.markdown("""
-            <div style='text-align: center; padding: 10px;'>
-                <div style='font-size: 40px; line-height: 1.2;'>
-                    ⚔️ 📊 🗡️
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+        # Only cache raw_player_data for the most recent 30 files to save memory
+        MAX_RAW_DATA_CACHE = 30
+        
+        # Track timing for performance analysis
+        import time
+        start_time = time.time()
+        
+        # Use st.spinner which automatically disappears when done
+        with st.spinner("🏰 Loading Realm Data..."):
+            # Overall progress bar
+            overall_progress = st.progress(0)
+            status_text = st.empty()
+            
+            # Recent activity display (show last 5 files)
+            recent_activity = st.empty()
             
             # Separate cached and uncached files
             files_to_download = []
@@ -576,12 +582,8 @@ def load_csv_files_from_github():
                     files_to_download.append(file_info)
             
             if files_to_download:
-                # Overall progress bar
-                overall_progress = st.progress(0)
-                status_text = st.empty()
-                
-                # Recent activity display (show last 5 files)
-                recent_activity = st.empty()
+                # Track total bytes downloaded
+                total_bytes_downloaded = 0
                 
                 def download_and_parse_file(file_info):
                     """Download and parse a single file"""
@@ -593,9 +595,20 @@ def load_csv_files_from_github():
                     short_name = filename.split('/')[-1]
                     
                     try:
+                        download_start = time.time()
                         csv_response = requests.get(download_url, headers=headers)
+                        download_time = time.time() - download_start
+                        
                         if csv_response.status_code != 200:
                             return None, filename, f"Download failed: {csv_response.status_code}"
+                        
+                        # Track bytes downloaded
+                        nonlocal total_bytes_downloaded
+                        bytes_downloaded = len(csv_response.content)
+                        total_bytes_downloaded += bytes_downloaded
+                        
+                        # Track decompression/parsing time
+                        parse_start = time.time()
                         
                         # Check if file is compressed
                         if filename.endswith('.gz'):
@@ -604,15 +617,26 @@ def load_csv_files_from_github():
                             csv_content = StringIO(csv_response.text)
                         
                         parsed_data = parse_single_file(csv_content, filename)
-                        return parsed_data, filename, None
+                        parse_time = time.time() - parse_start
+                        
+                        return parsed_data, filename, None, bytes_downloaded, download_time, parse_time
                     except Exception as e:
-                        return None, filename, str(e)
+                        return None, filename, str(e), 0, 0, 0
+                
+                def format_bytes(bytes):
+                    """Format bytes to human-readable format"""
+                    if bytes < 1024 * 1024:
+                        return f"{bytes / 1024:.2f} KB"
+                    elif bytes < 1024 * 1024 * 1024:
+                        return f"{bytes / (1024 * 1024):.2f} MB"
+                    else:
+                        return f"{bytes / (1024 * 1024 * 1024):.2f} GB"
                 
                 # Download files in parallel using ThreadPoolExecutor
                 completed_count = 0
                 recent_files = []
                 
-                with ThreadPoolExecutor(max_workers=50) as executor:
+                with ThreadPoolExecutor(max_workers=10) as executor:
                     future_to_file = {
                         executor.submit(download_and_parse_file, file_info): file_info 
                         for file_info in files_to_download
@@ -622,9 +646,9 @@ def load_csv_files_from_github():
                         completed_count += 1
                         progress = completed_count / len(files_to_download)
                         overall_progress.progress(progress)
-                        status_text.markdown(f"**Progress: {completed_count}/{len(files_to_download)} files ({progress:.1%})**")
+                        status_text.markdown(f"**Progress: {completed_count}/{len(files_to_download)} files ({progress:.1%}) | Downloaded: {format_bytes(total_bytes_downloaded)}**")
                         
-                        parsed_data, filename, error = future.result()
+                        parsed_data, filename, error, bytes_downloaded, download_time, parse_time = future.result()
                         short_name = filename.split('/')[-1]
                         
                         if error:
@@ -633,7 +657,7 @@ def load_csv_files_from_github():
                             memory_cache[filename] = {'data': parsed_data}
                             all_data.append(parsed_data)
                             new_parsed_count += 1
-                            recent_files.insert(0, f"✅ {short_name}")
+                            recent_files.insert(0, f"✅ {short_name} ({format_bytes(bytes_downloaded)}) - DL: {download_time:.2f}s, Parse: {parse_time:.2f}s")
                         else:
                             recent_files.insert(0, f"⚠️ {short_name} - No data")
                         
@@ -641,17 +665,18 @@ def load_csv_files_from_github():
                         recent_display = recent_files[:5]
                         recent_activity.markdown("**Recent Activity:**\n" + "\n".join(f"• {f}" for f in recent_display))
                 
-                # Overall completion message
-                st.markdown(f"### ✅ Loaded {len(all_data)} files total ({new_parsed_count} new)")
-                
-                # Clear all loading indicators
+                # Clear all loading indicators before spinner exits
                 overall_progress.empty()
                 status_text.empty()
                 recent_activity.empty()
-                status.empty()  # Remove the status container completely
+                
+                # Display timing information (temporary toast)
+                total_time = time.time() - start_time
+                if total_bytes_downloaded > 0:
+                    avg_speed = total_bytes_downloaded / total_time / (1024 * 1024)  # MB/s
+                    st.toast(f"⏱️ Total time: {total_time:.2f}s | Avg speed: {avg_speed:.2f} MB/s", icon="⏱️")
             else:
-                st.success(f"✅ All {len(all_data)} files loaded from cache!")
-                status.empty()  # Remove the status container completely
+                pass
     
     except Exception as e:
         st.error(f"❌ Error loading from GitHub: {e}")
@@ -659,6 +684,15 @@ def load_csv_files_from_github():
     
     # Sort by date
     all_data.sort(key=lambda x: x['date'])
+    
+    # Remove raw_player_data from older files to save memory (keep only most recent 30)
+    for idx, data in enumerate(all_data):
+        if idx >= len(all_data) - MAX_RAW_DATA_CACHE:
+            # Keep raw_player_data for recent files
+            continue
+        # Remove raw_player_data from older files
+        if 'raw_player_data' in data:
+            data['raw_player_data'] = None
     
     # Create DataFrame with all data but handle complex objects properly
     # Create a simple DataFrame first with only basic data types
