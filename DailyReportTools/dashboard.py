@@ -627,7 +627,7 @@ else:
                             selector=dict(name='active_players')
                         )
                         fig_players.update_yaxes(tickformat=',')
-                        st.plotly_chart(fig_players, width='stretch')
+                        st.plotly_chart(fig_players, config={'displayModeBar': False})
                     else:
                         st.warning("No valid player creation dates found in the latest comprehensive data file")
                 else:
@@ -672,7 +672,7 @@ else:
         create_pdd_tab(filtered_df)
     
     with tab16:
-        create_purchases_tab()
+        create_purchases_tab(filtered_df)
 
 # Add cache clear button at bottom
 st.sidebar.markdown("---")

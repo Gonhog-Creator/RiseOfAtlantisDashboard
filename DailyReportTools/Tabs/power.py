@@ -182,7 +182,7 @@ def create_power_tab(filtered_df):
                         fig_buckets.update_traces(
                             hovertemplate='<b>%{x}</b><br>Players: %{y}<br>Percentage: %{customdata[0]:.1f}%<br>Total Power: %{customdata[1]:,}<extra></extra>'
                         )
-                        st.plotly_chart(fig_buckets, width='stretch')
+                        st.plotly_chart(fig_buckets, config={'displayModeBar': False})
                         
                         # Bucket details table
                         bucket_display_df = bucket_df.copy()
@@ -322,7 +322,7 @@ def create_power_tab(filtered_df):
         fig_power.update_yaxes(title_text="Total Power", row=1, col=1)
         fig_power.update_yaxes(title_text="Daily Change", row=1, col=2)
         
-        st.plotly_chart(fig_power, width='stretch')
+        st.plotly_chart(fig_power, config={'displayModeBar': False})
         
         # Player Growth Chart (if comprehensive data available)
         if 'raw_player_data' in latest_data and len(filtered_df) > 1:
@@ -380,7 +380,7 @@ def create_power_tab(filtered_df):
                         yaxis_title="Power",
                         height=500
                     )
-                    st.plotly_chart(fig_individual, width='stretch')
+                    st.plotly_chart(fig_individual, config={'displayModeBar': False})
         
         # Data Table
         st.markdown("---")

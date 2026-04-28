@@ -77,11 +77,16 @@ def create_overview_tab(filtered_df):
     """Create the Overview tab with resource and player stats"""
     
     if not filtered_df.empty:
-        # Get all resource types (keep original case for data access)
+        # Get all resource types from actual resource columns
         all_resources = set()
-        for resources in filtered_df['resources']:
-            if isinstance(resources, dict):
-                all_resources.update(resources.keys())
+        for _, row in filtered_df.iterrows():
+            if 'raw_player_data' in row and row['raw_player_data'] is not None:
+                player_data = row['raw_player_data']
+                # Look for resource columns
+                resource_cols = [col for col in player_data.columns if col.startswith('resource_')]
+                for col in resource_cols:
+                    resource_name = col.replace('resource_', '')
+                    all_resources.add(resource_name)
         
         # Show main 6 resources only
         key_resources = ['gold', 'lumber', 'stone', 'metal', 'food', 'ruby']
@@ -118,15 +123,21 @@ def create_overview_tab(filtered_df):
                 sorted_filtered = filtered_df.sort_values('date')
                 if len(sorted_filtered) >= 2:
                     # Use comprehensive data for latest resources
-                    latest_resources = latest_comprehensive_data['resources']
-                    previous_resources = sorted_filtered.iloc[-2]['resources']
+                    latest_player_data = latest_comprehensive_data['raw_player_data']
+                    previous_row = sorted_filtered.iloc[-2]
+                    previous_player_data = previous_row['raw_player_data']
                     
                     # Create resource values list for daily rate calculation
                     for resource in display_resources:
                         resource_values = []
                         for _, row in sorted_filtered.iterrows():
-                            if isinstance(row['resources'], dict):
-                                resource_values.append(row['resources'].get(resource, 0))
+                            if 'raw_player_data' in row and row['raw_player_data'] is not None:
+                                player_data = row['raw_player_data']
+                                resource_col = f'resource_{resource}'
+                                if resource_col in player_data.columns:
+                                    resource_values.append(player_data[resource_col].sum())
+                                else:
+                                    resource_values.append(0)
                             else:
                                 resource_values.append(0)
                         
@@ -162,14 +173,18 @@ def create_overview_tab(filtered_df):
                         cols = st.columns(3)
                         for j, resource in enumerate(display_resources[i:i+3]):
                             with cols[j]:
-                                if isinstance(latest_resources, dict):
-                                    latest_amount = latest_resources.get(resource, 0)
+                                # Get latest amount from resource columns
+                                resource_col = f'resource_{resource}'
+                                if resource_col in latest_player_data.columns:
+                                    latest_amount = latest_player_data[resource_col].sum()
+                                else:
+                                    latest_amount = 0
                                     
                                     # Get calculated daily rate (per day)
                                     daily_rate = sorted_filtered.iloc[-1][f'{resource}_daily_rate']
                                     
                                     # Calculate per player amount
-                                    latest_players = sorted_filtered.iloc[-1]['total_players']
+                                    latest_players = len(sorted_filtered.iloc[-1]['raw_player_data']) if 'raw_player_data' in sorted_filtered.iloc[-1] and sorted_filtered.iloc[-1]['raw_player_data'] is not None else 0
                                     avg_per_player = latest_amount / latest_players if latest_players > 0 else 0
                                     
                                     # Use st.metric for consistent styling in both modes
@@ -207,14 +222,19 @@ def create_overview_tab(filtered_df):
                 st.markdown("### 👥 Player Stats")
                 
                 # Player stats in grid
-                latest_players = filtered_df.iloc[-1]['total_players']
+                latest_players = len(filtered_df.iloc[-1]['raw_player_data']) if 'raw_player_data' in filtered_df.iloc[-1] and filtered_df.iloc[-1]['raw_player_data'] is not None else 0
                 
                 if len(filtered_df) >= 2:
                     sorted_df = filtered_df.sort_values('date')
                     latest_date = sorted_df.iloc[-1]['date']
                     
                     # Calculate true daily growth rate using time differences
-                    player_values = sorted_df['total_players'].tolist()
+                    player_values = []
+                    for _, row in sorted_df.iterrows():
+                        if 'raw_player_data' in row and row['raw_player_data'] is not None:
+                            player_values.append(len(row['raw_player_data']))
+                        else:
+                            player_values.append(0)
                     daily_rates = []
                     for i in range(len(player_values)):
                         if i == 0:
@@ -238,7 +258,7 @@ def create_overview_tab(filtered_df):
                     
                     # Get the latest daily rate
                     daily_growth = daily_rates[-1]
-                    prev_day_players = sorted_df.iloc[-2]['total_players']
+                    prev_day_players = len(sorted_df.iloc[-2]['raw_player_data']) if 'raw_player_data' in sorted_df.iloc[-2] and sorted_df.iloc[-2]['raw_player_data'] is not None else 0
                     if prev_day_players > 0:
                         daily_percent = (daily_growth / prev_day_players) * 100
                     else:
@@ -248,7 +268,7 @@ def create_overview_tab(filtered_df):
                     week_ago = latest_date - pd.Timedelta(days=7)
                     week_data = sorted_df[sorted_df['date'] >= week_ago]
                     if len(week_data) >= 2:
-                        week_ago_players = week_data.iloc[0]['total_players']
+                        week_ago_players = len(week_data.iloc[0]['raw_player_data']) if 'raw_player_data' in week_data.iloc[0] and week_data.iloc[0]['raw_player_data'] is not None else 0
                         if week_ago_players > 0:
                             weekly_growth = latest_players - week_ago_players
                             weekly_percent = (weekly_growth / week_ago_players) * 100
@@ -263,7 +283,7 @@ def create_overview_tab(filtered_df):
                     month_ago = latest_date - pd.Timedelta(days=30)
                     month_data = sorted_df[sorted_df['date'] >= month_ago]
                     if len(month_data) >= 2:
-                        month_ago_players = month_data.iloc[0]['total_players']
+                        month_ago_players = len(month_data.iloc[0]['raw_player_data']) if 'raw_player_data' in month_data.iloc[0] and month_data.iloc[0]['raw_player_data'] is not None else 0
                         if month_ago_players > 0:
                             monthly_growth = latest_players - month_ago_players
                             monthly_percent = (monthly_growth / month_ago_players) * 100
@@ -320,7 +340,7 @@ def create_overview_tab(filtered_df):
                 # Extract power data from realm summary (handle missing power data)
                 total_power = latest_data.get('total_power', 0) if 'total_power' in latest_data else 0
                 avg_power_per_player = latest_data.get('avg_power_per_player', 0) if 'avg_power_per_player' in latest_data else 0
-                latest_players = latest_data.get('total_players', 0)
+                latest_players = len(filtered_df.iloc[-1]['raw_player_data']) if 'raw_player_data' in filtered_df.iloc[-1] and filtered_df.iloc[-1]['raw_player_data'] is not None else 0
                 
                 # Calculate power growth rates (only if total_power column exists)
                 daily_power_change = 0
@@ -506,7 +526,7 @@ def create_overview_tab(filtered_df):
                 latest_amount = respirator_values[-1]
                 
                 # Calculate average per player
-                latest_players = filtered_df.iloc[-1]['total_players']
+                latest_players = len(filtered_df.iloc[-1]['raw_player_data']) if 'raw_player_data' in filtered_df.iloc[-1] and filtered_df.iloc[-1]['raw_player_data'] is not None else 0
                 avg_per_player = latest_amount / latest_players if latest_players > 0 else 0
                 
                 # Display elite item tile (compact)
@@ -599,9 +619,18 @@ def create_overview_tab(filtered_df):
             
             # Get all item types and find speedup items
             all_items = set()
-            for items in filtered_df['items']:
-                if isinstance(items, dict):
-                    all_items.update(items.keys())
+            for _, row in filtered_df.iterrows():
+                if 'raw_player_data' in row and row['raw_player_data'] is not None:
+                    player_data = row['raw_player_data']
+                    if 'items_json' in player_data.columns:
+                        items_json = player_data['items_json']
+                        if not items_json.isna().any() and not items_json.empty:
+                            try:
+                                items_dict = json.loads(items_json.iloc[0]) if len(items_json) > 0 else {}
+                                if isinstance(items_dict, dict):
+                                    all_items.update(items_dict.keys())
+                            except:
+                                continue
             
             # Find speedup items in data (in order of time)
             available_speedups = []
@@ -623,15 +652,24 @@ def create_overview_tab(filtered_df):
                             # Get latest amount (using same logic as speedups tab)
                             sorted_df = filtered_df.sort_values('date')
                             latest_amount = 0
-                            for items in sorted_df['items']:
-                                if isinstance(items, dict):
-                                    count = 0
-                                    for item_name, amount in items.items():
-                                        # Handle both spaces and underscores for matching (exclude x5, x10, x15 variants)
-                                        search_key = speedup_type.lower().replace(' ', '_')
-                                        search_name = item_name.lower()
-                                        if (search_key in search_name or speedup_type.lower() in search_name) and not any(x in search_name for x in ['_x5', '_x10', '_x15']):
-                                            count += amount
+                            for _, row in sorted_df.iterrows():
+                                if 'raw_player_data' in row and row['raw_player_data'] is not None:
+                                    player_data = row['raw_player_data']
+                                    if 'items_json' in player_data.columns:
+                                        items_json = player_data['items_json']
+                                        if not items_json.isna().any() and not items_json.empty:
+                                            try:
+                                                items_dict = json.loads(items_json.iloc[0]) if len(items_json) > 0 else {}
+                                                if isinstance(items_dict, dict):
+                                                    count = 0
+                                                    for item_name, amount in items_dict.items():
+                                                        # Handle both spaces and underscores for matching (exclude x5, x10, x15 variants)
+                                                        search_key = speedup_type.lower().replace(' ', '_')
+                                                        search_name = item_name.lower()
+                                                        if (search_key in search_name or speedup_type.lower() in search_name) and not any(x in search_name for x in ['_x5', '_x10', '_x15']):
+                                                            count += amount
+                                            except:
+                                                pass
                                     latest_amount = count  # This will be the last value
                                 else:
                                     latest_amount = 0
@@ -640,15 +678,24 @@ def create_overview_tab(filtered_df):
                             if len(sorted_df) >= 2:
                                 # Get all values in order
                                 values = []
-                                for items in sorted_df['items']:
-                                    if isinstance(items, dict):
-                                        count = 0
-                                        for item_name, amount in items.items():
-                                            # Handle both spaces and underscores for matching (exclude x5, x10, x15 variants)
-                                            search_key = speedup_type.lower().replace(' ', '_')
-                                            search_name = item_name.lower()
-                                            if (search_key in search_name or speedup_type.lower() in search_name) and not any(x in search_name for x in ['_x5', '_x10', '_x15']):
-                                                count += amount
+                                for _, row in sorted_df.iterrows():
+                                    if 'raw_player_data' in row and row['raw_player_data'] is not None:
+                                        player_data = row['raw_player_data']
+                                        if 'items_json' in player_data.columns:
+                                            items_json = player_data['items_json']
+                                            if not items_json.isna().any() and not items_json.empty:
+                                                try:
+                                                    items_dict = json.loads(items_json.iloc[0]) if len(items_json) > 0 else {}
+                                                    if isinstance(items_dict, dict):
+                                                        count = 0
+                                                        for item_name, amount in items_dict.items():
+                                                            # Handle both spaces and underscores for matching (exclude x5, x10, x15 variants)
+                                                            search_key = speedup_type.lower().replace(' ', '_')
+                                                            search_name = item_name.lower()
+                                                            if (search_key in search_name or speedup_type.lower() in search_name) and not any(x in search_name for x in ['_x5', '_x10', '_x15']):
+                                                                count += amount
+                                                except:
+                                                    pass
                                         values.append(count)
                                     else:
                                         values.append(0)
@@ -681,7 +728,7 @@ def create_overview_tab(filtered_df):
                             time_duration = speedup_items.get(speedup_type, '')
                             
                             # Calculate average per player
-                            latest_players = sorted_df.iloc[-1]['total_players']
+                            latest_players = len(sorted_df.iloc[-1]['raw_player_data']) if 'raw_player_data' in sorted_df.iloc[-1] and sorted_df.iloc[-1]['raw_player_data'] is not None else 0
                             avg_per_player = latest_amount / latest_players if latest_players > 0 else 0
                             
                             # Read image and convert to base64

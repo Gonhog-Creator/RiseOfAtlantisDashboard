@@ -163,7 +163,7 @@ def create_resources_tab(filtered_df):
                 fig_resources.update_yaxes(title_text="Amount", row=i+1, col=1)
                 fig_resources.update_yaxes(title_text="Daily Change (Raw Amount)", row=i+1, col=2)
             
-            st.plotly_chart(fig_resources, width='stretch')
+            st.plotly_chart(fig_resources, config={'displayModeBar': False})
             
             # Elite Items Section (Fangtooth Respirators)
             st.markdown("---")
@@ -275,7 +275,7 @@ def create_resources_tab(filtered_df):
                 fig_respirators.update_yaxes(title_text="Quantity", row=1, col=1)
                 fig_respirators.update_yaxes(title_text="Daily Change", row=1, col=2)
                 
-                st.plotly_chart(fig_respirators, width='stretch')
+                st.plotly_chart(fig_respirators, config={'displayModeBar': False})
             else:
                 st.info("No fangtooth respirators found in the data")
             
@@ -342,7 +342,7 @@ def create_resources_tab(filtered_df):
                     height=500
                 )
                 
-                st.plotly_chart(fig_combined, width='stretch')
+                st.plotly_chart(fig_combined, config={'displayModeBar': False})
             else:
                 st.info("Please select at least one resource to display")
     else:

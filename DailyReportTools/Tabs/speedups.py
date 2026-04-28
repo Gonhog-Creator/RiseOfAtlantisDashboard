@@ -308,7 +308,7 @@ def create_speedups_tab(filtered_df):
                             row=row, col=col
                         )
                 
-                st.plotly_chart(fig_speedups, width='stretch')
+                st.plotly_chart(fig_speedups, config={'displayModeBar': False})
         else:
             st.info("No speedup items found in the data.")
         

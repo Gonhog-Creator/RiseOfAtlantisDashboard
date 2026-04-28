@@ -186,7 +186,7 @@ def create_skins_tab(filtered_df):
                             yaxis_title="Number of Players",
                             height=500
                         )
-                        st.plotly_chart(fig_top_skins, width='stretch')
+                        st.plotly_chart(fig_top_skins, config={'displayModeBar': False})
                         
                         # Percentage distribution pie chart
                         if len(skins_df) <= 10:  # Only show pie chart if not too many skins
@@ -198,7 +198,7 @@ def create_skins_tab(filtered_df):
                                 hole=0.3
                             )
                             fig_pie.update_layout(height=500)
-                            st.plotly_chart(fig_pie, width='stretch')
+                            st.plotly_chart(fig_pie, config={'displayModeBar': False})
                         else:
                             # Show top 10 in pie chart
                             fig_pie = px.pie(
@@ -209,7 +209,7 @@ def create_skins_tab(filtered_df):
                                 hole=0.3
                             )
                             fig_pie.update_layout(height=500)
-                            st.plotly_chart(fig_pie, width='stretch')
+                            st.plotly_chart(fig_pie, config={'displayModeBar': False})
                         
                         # Detailed skin analysis
                         st.markdown("#### Detailed Skin Analysis")
@@ -280,7 +280,7 @@ def create_skins_tab(filtered_df):
                                         nbins=20
                                     )
                                     fig_power.update_layout(height=400)
-                                    st.plotly_chart(fig_power, width='stretch')
+                                    st.plotly_chart(fig_power, config={'displayModeBar': False})
                             else:
                                 st.warning(f"No players found with {selected_skin}")
                     

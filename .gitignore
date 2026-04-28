@@ -16,7 +16,7 @@
 *backup
 
 # Streamlit secrets
-.streamlit/
+DailyReportTools/.streamlit/
 
 # Local secrets files
 secrets.json

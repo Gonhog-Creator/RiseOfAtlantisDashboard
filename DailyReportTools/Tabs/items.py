@@ -393,7 +393,7 @@ def render_items_analysis(sorted_categories, df, use_comprehensive):
                 fig.update_yaxes(title_text="Quantity", row=(i//2)+1, col=(i%2)*2+1)
                 fig.update_yaxes(title_text="Daily Change", row=(i//2)+1, col=(i%2)*2+2)
             
-            st.plotly_chart(fig, width='stretch')
+            st.plotly_chart(fig, config={'displayModeBar': False})
             
             # Summary statistics for selected items
             st.markdown("#### 📈 Selected Items Summary")

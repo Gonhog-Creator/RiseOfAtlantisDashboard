@@ -234,7 +234,7 @@ def render_building_analysis(building_stats):
                     yaxis_title="Number of Buildings",
                     height=400
                 )
-                st.plotly_chart(fig_level, width='stretch')
+                st.plotly_chart(fig_level, config={'displayModeBar': False})
     
     else:
         st.info("No data available for building analysis")

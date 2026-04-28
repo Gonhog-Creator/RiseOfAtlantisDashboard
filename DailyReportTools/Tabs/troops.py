@@ -112,7 +112,7 @@ def render_troops_over_time_chart(filtered_df, latest_data):
                         height=400
                     )
                     
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, config={'displayModeBar': False})
                 else:
                     st.warning("No troops data available over time")
             else:

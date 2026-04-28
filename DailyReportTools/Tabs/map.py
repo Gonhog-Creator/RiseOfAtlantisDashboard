@@ -245,7 +245,7 @@ def create_map_tab(filtered_df):
             showlegend=True
         ))
         
-        st.plotly_chart(fig, width='stretch')
+        st.plotly_chart(fig, config={'displayModeBar': False})
 
 @st.fragment
 def render_settlement_search(settlements):

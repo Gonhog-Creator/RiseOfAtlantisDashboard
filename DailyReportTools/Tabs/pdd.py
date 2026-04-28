@@ -67,7 +67,7 @@ def render_resources_chart(resource_data, selected_name):
                 xaxis_title='Date',
                 yaxis_title='Amount'
             )
-            st.plotly_chart(fig_resources, width='stretch')
+            st.plotly_chart(fig_resources, config={'displayModeBar': False})
 
 @st.fragment
 def render_items_chart(items_data, selected_name):
@@ -101,7 +101,7 @@ def render_items_chart(items_data, selected_name):
                 xaxis_title='Date',
                 yaxis_title='Count'
             )
-            st.plotly_chart(fig_items, width='stretch')
+            st.plotly_chart(fig_items, config={'displayModeBar': False})
 
 @st.fragment
 def render_player_details(selected_name, player_data, latest_data, filtered_df):
@@ -468,7 +468,7 @@ def render_player_details(selected_name, player_data, latest_data, filtered_df):
     if power_data:
         power_df = pd.DataFrame(power_data)
         fig_power = px.line(power_df, x='Date', y='Power', title='Power Over Time')
-        st.plotly_chart(fig_power, width='stretch')
+        st.plotly_chart(fig_power, config={'displayModeBar': False})
     
     # Resources Over Time chart
     st.markdown("##### Resources Over Time")

@@ -431,7 +431,7 @@ def create_ceasefire_tab(filtered_df):
                                 hovertemplate='<b>%{label}</b><br>Amount: %{customdata}<br>Percent: %{percent}<extra></extra>',
                                 text=pie_df['Formatted Amount'].tolist()
                             )
-                            st.plotly_chart(fig_pie, width='stretch')
+                            st.plotly_chart(fig_pie, config={'displayModeBar': False})
                         else:
                             st.write(f"No {resource_display_names[resource]} data available")
         

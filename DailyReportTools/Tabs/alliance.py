@@ -286,7 +286,7 @@ def render_alliance_selection(alliance_names, current_stats, filtered_df):
             fig.update_traces(line=dict(width=2), marker=dict(size=6))
             fig.update_yaxes(tickformat=',')
             
-            st.plotly_chart(fig, width='stretch')
+            st.plotly_chart(fig, config={'displayModeBar': False})
         else:
             st.info("No historical power data available for this alliance")
         
@@ -370,7 +370,7 @@ def render_alliance_selection(alliance_names, current_stats, filtered_df):
                     if resource in member_table.columns:
                         member_table[resource] = member_table[resource].apply(lambda x: f"{int(x):,}" if pd.notna(x) and x != 0 else '0')
                 
-                st.dataframe(member_table, width='stretch', hide_index=True)
+                st.dataframe(member_table, hide_index=True, use_container_width=True)
     
     else:
         st.info("No data available for alliance analysis")
