@@ -37,7 +37,6 @@ def normalize_store_name(product_id):
 @st.fragment
 def create_purchases_tab(filtered_df):
     """Create the Purchases tab"""
-    st.markdown("### Purchases")
     
     # Get the latest comprehensive data to extract purchase information
     latest_comprehensive_data = None
@@ -74,7 +73,6 @@ def create_purchases_tab(filtered_df):
     
     # Enhanced Purchases Overview
     st.markdown("---")
-    st.markdown("#### 📊 Purchases Overview")
     
     # Process all purchase data for analytics
     all_shop_purchases = []

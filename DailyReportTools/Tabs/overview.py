@@ -121,9 +121,12 @@ def create_overview_tab(filtered_df):
                 
                 # Calculate daily increases using true daily rates
                 sorted_filtered = filtered_df.sort_values('date')
+                
+                # Use comprehensive data for latest resources
+                latest_player_data = latest_comprehensive_data.raw_player_data
+                
+                # Only calculate daily rates if we have multiple data points
                 if len(sorted_filtered) >= 2:
-                    # Use comprehensive data for latest resources
-                    latest_player_data = latest_comprehensive_data['raw_player_data']
                     previous_row = sorted_filtered.iloc[-2]
                     previous_player_data = previous_row['raw_player_data']
                     
@@ -163,60 +166,63 @@ def create_overview_tab(filtered_df):
                         
                         # Store the latest daily rate for this resource
                         sorted_filtered.loc[:, f'{resource}_daily_rate'] = daily_rates
+                
+                # Create 2x3 grid for resource metrics (always show, even with single data point)
+                for i in range(0, len(display_resources), 3):
+                    # Add spacing between rows (except for the first row)
+                    if i > 0:
+                        st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
                     
-                    # Create 2x3 grid for resource metrics
-                    for i in range(0, len(display_resources), 3):
-                        # Add spacing between rows (except for the first row)
-                        if i > 0:
-                            st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
-                        
-                        cols = st.columns(3)
-                        for j, resource in enumerate(display_resources[i:i+3]):
-                            with cols[j]:
-                                # Get latest amount from resource columns
-                                resource_col = f'resource_{resource}'
-                                if resource_col in latest_player_data.columns:
-                                    latest_amount = latest_player_data[resource_col].sum()
-                                else:
-                                    latest_amount = 0
-                                    
-                                    # Get calculated daily rate (per day)
-                                    daily_rate = sorted_filtered.iloc[-1][f'{resource}_daily_rate']
-                                    
-                                    # Calculate per player amount
-                                    latest_players = len(sorted_filtered.iloc[-1]['raw_player_data']) if 'raw_player_data' in sorted_filtered.iloc[-1] and sorted_filtered.iloc[-1]['raw_player_data'] is not None else 0
-                                    avg_per_player = latest_amount / latest_players if latest_players > 0 else 0
-                                    
-                                    # Use st.metric for consistent styling in both modes
-                                    st.metric(
-                                        resource.title(),
-                                        format_number(latest_amount, show_full_numbers),
-                                        format_rate(daily_rate, show_full_numbers)
-                                    )
-                                    
-                                    # Calculate unprotected resources (total - protected)
-                                    unprotected_amount = 0
-                                    unprotected_percentage = 0
-                                    
-                                    # Get ceasefire protection data if available from comprehensive data
-                                    if 'ceasefire_data' in latest_comprehensive_data and isinstance(latest_comprehensive_data['ceasefire_data'], dict):
-                                        ceasefire_info = latest_comprehensive_data['ceasefire_data'].get(resource, {})
-                                        protected_amount = ceasefire_info.get('protected', 0)
-                                        total_amount = ceasefire_info.get('total', latest_amount)
-                                        unprotected_amount = total_amount - protected_amount
-                                        unprotected_percentage = (unprotected_amount / total_amount * 100) if total_amount > 0 else 0
-                                    else:
-                                        # If no ceasefire data, unprotected equals total
-                                        unprotected_amount = latest_amount
-                                        unprotected_percentage = 100.0
-                                    
-                                    # Add per player amount and unprotected resources info below metric
-                                    # Per player badge
-                                    st.markdown(f"<div style='text-align: left; margin-top: -10px; margin-bottom: 2px;'><span style='background-color: #666; color: white; padding: 2px 8px; border-radius: 12px; font-size: 14px;'>{format_number(avg_per_player, show_full_numbers)}/player</span></div>", unsafe_allow_html=True)
-                                    
-                                    # Unprotected badge below (only if not ruby)
-                                    if unprotected_amount > 0 and resource != 'ruby':
-                                        st.markdown(f"<div style='text-align: left; margin-top: 0px;'><span style='background-color: #87CEEB; color: #333; padding: 2px 8px; border-radius: 12px; font-size: 14px;'>{format_number(unprotected_amount, show_full_numbers)} unprotected ({unprotected_percentage:.1f}%)</span></div>", unsafe_allow_html=True)
+                    cols = st.columns(3)
+                    for j, resource in enumerate(display_resources[i:i+3]):
+                        with cols[j]:
+                            # Get latest amount from resource columns
+                            resource_col = f'resource_{resource}'
+                            if resource_col in latest_player_data.columns:
+                                latest_amount = latest_player_data[resource_col].sum()
+                            else:
+                                latest_amount = 0
+                            
+                        # Get calculated daily rate (per day)
+                            if f'{resource}_daily_rate' in sorted_filtered.columns:
+                                daily_rate = sorted_filtered.iloc[-1][f'{resource}_daily_rate']
+                            else:
+                                daily_rate = 0
+                            
+                            # Calculate per player amount
+                            latest_players = len(sorted_filtered.iloc[-1]['raw_player_data']) if 'raw_player_data' in sorted_filtered.iloc[-1] and sorted_filtered.iloc[-1]['raw_player_data'] is not None else 0
+                            avg_per_player = latest_amount / latest_players if latest_players > 0 else 0
+                            
+                            # Use st.metric for consistent styling in both modes
+                            st.metric(
+                                resource.title(),
+                                format_number(latest_amount, show_full_numbers),
+                                format_rate(daily_rate, show_full_numbers)
+                            )
+                            
+                            # Calculate unprotected resources (total - protected)
+                            unprotected_amount = 0
+                            unprotected_percentage = 0
+                            
+                            # Get ceasefire protection data if available from comprehensive data
+                            if hasattr(latest_comprehensive_data, 'ceasefire_data') and isinstance(latest_comprehensive_data.ceasefire_data, dict):
+                                ceasefire_info = latest_comprehensive_data.ceasefire_data.get(resource, {})
+                                protected_amount = ceasefire_info.get('protected', 0)
+                                total_amount = ceasefire_info.get('total', latest_amount)
+                                unprotected_amount = total_amount - protected_amount
+                                unprotected_percentage = (unprotected_amount / total_amount * 100) if total_amount > 0 else 0
+                            else:
+                                # If no ceasefire data, unprotected equals total
+                                unprotected_amount = latest_amount
+                                unprotected_percentage = 100.0
+                            
+                            # Add per player amount and unprotected resources info below metric
+                            # Per player badge
+                            st.markdown(f"<div style='text-align: left; margin-top: -10px; margin-bottom: 2px;'><span style='background-color: #666; color: white; padding: 2px 8px; border-radius: 12px; font-size: 14px;'>{format_number(avg_per_player, show_full_numbers)}/player</span></div>", unsafe_allow_html=True)
+                            
+                            # Unprotected badge below (only if not ruby)
+                            if unprotected_amount > 0 and resource != 'ruby':
+                                st.markdown(f"<div style='text-align: left; margin-top: 0px;'><span style='background-color: #87CEEB; color: #333; padding: 2px 8px; border-radius: 12px; font-size: 14px;'>{format_number(unprotected_amount, show_full_numbers)} unprotected ({unprotected_percentage:.1f}%)</span></div>", unsafe_allow_html=True)
             
             with col2:
                 st.markdown("### 👥 Player Stats")
