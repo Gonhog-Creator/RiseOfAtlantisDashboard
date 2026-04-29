@@ -786,3 +786,123 @@ def create_overview_tab(filtered_df):
                     pass
     else:
         st.info("No data available")
+
+    # Speedup Section - Top 50 Players by Power
+    st.markdown("---")
+    st.markdown("#### ⚡ Speedup Inventory - Top 50 Players by Power")
+    
+    if not filtered_df.empty and 'raw_player_data' in filtered_df.iloc[-1]:
+        try:
+            latest_data = filtered_df.sort_values('date', ascending=False).iloc[0]
+            player_df = latest_data['raw_player_data']
+            
+            if isinstance(player_df, pd.DataFrame) and not player_df.empty:
+                # Get top 50 players by power
+                top_50_players = player_df.nlargest(50, 'power')
+                
+                # Define speedup items matching Speedups Overview section (excluding testronius powers)
+                speedup_items = {
+                    'blink': {'name': 'Blink', 'duration': '1 min'},
+                    'hop': {'name': 'Hop', 'duration': '5 min'},
+                    'skip': {'name': 'Skip', 'duration': '15 min'},
+                    'jump': {'name': 'Jump', 'duration': '30 min'},
+                    'leap': {'name': 'Leap', 'duration': '2.5 hours'},
+                    'bounce': {'name': 'Bounce', 'duration': '8 hours'},
+                    'bore': {'name': 'Bore', 'duration': '15 hours'},
+                    'bolt': {'name': 'Bolt', 'duration': '24 hours'},
+                    'blast': {'name': 'Blast', 'duration': '2.5 days'},
+                    'blitz': {'name': 'Blitz', 'duration': '4 days'},
+                }
+                
+                # Note: Testronius powers (Dust, Powder, Deluxe, Infusion) are excluded as requested
+                
+                # Calculate totals for each speedup item
+                speedup_totals = {}
+                total_hourly_amount = 0
+                
+                for item_key, item_info in speedup_items.items():
+                    total_count = 0
+                    
+                    for _, player in top_50_players.iterrows():
+                        if 'items_json' in player and pd.notna(player['items_json']):
+                            try:
+                                items_data = json.loads(player['items_json'])
+                                if item_key in items_data:
+                                    total_count += items_data[item_key]
+                            except:
+                                continue
+                    
+                    speedup_totals[item_key] = {
+                        'total': total_count,
+                        'name': item_info['name'],
+                        'duration': item_info['duration']
+                    }
+                    
+                    # Calculate hourly contribution
+                    duration = item_info['duration']
+                    if 'min' in duration:
+                        minutes = int(duration.split(' ')[0])
+                        hours = minutes / 60
+                    elif 'hour' in duration:
+                        if 'hours' in duration:
+                            hours = float(duration.split(' ')[0])
+                        else:
+                            hours = 1
+                    elif 'day' in duration:
+                        if 'days' in duration:
+                            days = float(duration.split(' ')[0])
+                            hours = days * 24
+                        else:
+                            hours = 24
+                    else:
+                        hours = 1
+                    
+                    total_hourly_amount += total_count * hours
+                
+                # Display results
+                if speedup_totals:
+                    # Create two columns for layout
+                    col1, col2 = st.columns([2, 1])
+                    
+                    with col1:
+                        st.markdown("**Total Speedup Items (Top 50 Players)**")
+                        
+                        # Create a table of speedup totals
+                        speedup_df_data = []
+                        for item_key, data in speedup_totals.items():
+                            speedup_df_data.append({
+                                'Item': data['name'],
+                                'Duration': data['duration'],
+                                'Total Count': data['total'],
+                                'Per Player': f"{data['total'] / 50:.1f}"
+                            })
+                        
+                        if speedup_df_data:
+                            speedup_df = pd.DataFrame(speedup_df_data)
+                            speedup_df = speedup_df.sort_values('Total Count', ascending=False)
+                            st.dataframe(speedup_df, width='stretch', hide_index=True)
+                    
+                    with col2:
+                        st.markdown("**Combined Hourly Impact**")
+                        
+                        # Display total hourly amount
+                        st.metric(
+                            "Total Hours per Hour",
+                            f"{total_hourly_amount:,.0f}",
+                            help="Combined speedup hours from all top 50 players"
+                        )
+                        
+                        # Show top 3 items by count
+                        if speedup_df_data:
+                            top_items = sorted(speedup_df_data, key=lambda x: x['Total Count'], reverse=True)[:3]
+                            st.markdown("**Top 3 Items:**")
+                            for item in top_items:
+                                st.markdown(f"• {item['Item']}: {item['Total Count']:,}")
+                
+                else:
+                    st.info("No speedup items found in top 50 players")
+                    
+        except Exception as e:
+            st.error(f"Error calculating speedup data: {e}")
+    else:
+        st.info("No player data available for speedup analysis")

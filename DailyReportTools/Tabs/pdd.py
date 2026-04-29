@@ -679,7 +679,6 @@ def render_player_details(selected_name, player_data, latest_data, filtered_df):
                         buildings_by_type[btype][level] += 1
                     
                     # Display buildings with level distribution visualization
-                    st.markdown("##### Building Inventory")
                     
                     # Group buildings in a grid
                     cols = st.columns(5)
@@ -750,7 +749,7 @@ def render_player_details(selected_name, player_data, latest_data, filtered_df):
                             <html>
                             <head>
                             <style>
-                                body {{ margin: 0; padding: 0; overflow: hidden; }}
+                                body {{ margin: 0; padding: 0; overflow: hidden; background: transparent; }}
                                 .building-container {{ text-align: center; padding: 15px; overflow: hidden; }}
                             </style>
                             </head>
@@ -764,13 +763,13 @@ def render_player_details(selected_name, player_data, latest_data, filtered_df):
                                     </div>
                                 </div>
                                 <div style="margin-top: 10px; font-weight: bold; font-size: 18px; color: white;">{building_type.replace('_', ' ').title()}</div>
-                                <div style="font-size: 16px; color: #666;">Total: {total_count}</div>
+                                <div style="font-size: 16px; color: #ccc;">Total: {total_count}</div>
                             </div>
                             </body>
                             </html>
                             """
                             
-                            st.iframe(arc_html, height=340)
+                            st.html(arc_html)
                         
                         col_idx += 1
                 else:
@@ -903,13 +902,17 @@ def render_player_search(player_options, latest_data, filtered_df):
         # Default to logged-in user if they're one of the four authorized users
         authorized_users = ['Gonhog', 'Moachi', 'Skenz', 'Higgins']
         default_index = 0
-        if 'username' in st.session_state and st.session_state.username in authorized_users:
-            logged_in_user = st.session_state.username
-            # Find the index of the logged-in user in filtered_options
-            for i, option in enumerate(filtered_options):
-                if option.startswith(logged_in_user + ' |'):
-                    default_index = i
-                    break
+        try:
+            if hasattr(st, 'session_state') and 'username' in st.session_state and st.session_state.username in authorized_users:
+                logged_in_user = st.session_state.username
+                # Find the index of the logged-in user in filtered_options
+                for i, option in enumerate(filtered_options):
+                    if option.startswith(logged_in_user + ' |'):
+                        default_index = i
+                        break
+        except AttributeError:
+            # Session state not available (testing mode), use default
+            pass
         
         selected_player_option = st.selectbox("Select a player:", options=filtered_options, index=default_index)
         
