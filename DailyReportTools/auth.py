@@ -12,8 +12,22 @@ def load_secrets():
     try:
         # Try local config file first
         import os
-        config_path = os.path.join(os.path.dirname(__file__), "local_config.json")
-        if os.path.exists(config_path):
+        from pathlib import Path
+        
+        # Try multiple possible paths for local config
+        config_paths = [
+            Path(__file__).parent / "local_config.json",  # Same directory as auth.py
+            Path.home() / "Desktop" / "RoADashboard" / "DailyReportTools" / "local_config.json",  # Desktop path
+            Path("local_config.json"),  # Current working directory
+        ]
+        
+        config_path = None
+        for path in config_paths:
+            if path.exists():
+                config_path = path
+                break
+        
+        if config_path:
             with open(config_path, 'r') as f:
                 config = json.load(f)
             SECRET_KEY = config["SECRET_KEY"]
