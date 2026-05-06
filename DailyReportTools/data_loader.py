@@ -9,7 +9,21 @@ import requests
 from io import StringIO
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from utils import calculate_daily_rate
-from auth import get_github_credentials
+try:
+    from auth import get_github_credentials
+except ImportError:
+    try:
+        from DailyReportTools.auth import get_github_credentials
+    except ImportError:
+        # Fallback - define minimal function needed
+        import streamlit as st
+        def get_github_credentials():
+            try:
+                github_token = st.secrets.get("github_token", "")
+                csv_repo_url = st.secrets.get("csv_repo_url", "")
+                return github_token, csv_repo_url
+            except:
+                return "", ""
 
 def parse_comprehensive_csv_from_string(content, filename):
     """Parse comprehensive CSV from string content (for GitHub loading)"""

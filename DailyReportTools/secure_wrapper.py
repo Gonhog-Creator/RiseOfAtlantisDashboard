@@ -9,7 +9,21 @@ import hashlib
 from functools import wraps
 
 # Import authentication functions from auth module
-from auth import generate_token, verify_token, check_authentication, login_page, require_auth, logout, show_logout_button, get_github_credentials
+try:
+    from auth import generate_token, verify_token, check_authentication, login_page, require_auth, logout, show_logout_button, get_github_credentials
+except ImportError:
+    try:
+        from DailyReportTools.auth import generate_token, verify_token, check_authentication, login_page, require_auth, logout, show_logout_button, get_github_credentials
+    except ImportError:
+        # Fallback - define minimal functions needed
+        import streamlit as st
+        def get_github_credentials():
+            try:
+                github_token = st.secrets.get("github_token", "")
+                csv_repo_url = st.secrets.get("csv_repo_url", "")
+                return github_token, csv_repo_url
+            except:
+                return "", ""
 
 # Configuration - Load from Streamlit secrets or local fallback
 def load_github_secrets():
