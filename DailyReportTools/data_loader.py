@@ -474,27 +474,31 @@ def parse_single_file(file_source, filename=None):
 def load_csv_files_from_github():
     """Load CSV files directly from GitHub API (no local files)"""
     try:
-        # Get GitHub credentials from centralized auth module
-        github_token, csv_repo_url = get_github_credentials()
+        # Try to get GitHub credentials from secrets (working pattern from 2.7)
+        github_token = None
+        csv_repo_url = None
         
-        # Debug: Show credential status (remove in production)
-        # st.write(f"🔍 Debug: Token present: {bool(github_token)}, URL present: {bool(csv_repo_url)}")
+        # Check for secrets in multiple possible locations
+        if hasattr(st, 'secrets'):
+            all_secrets = dict(st.secrets)
+            
+            # Try root level first
+            if "github_token" in all_secrets:
+                github_token = st.secrets["github_token"]
+            if "csv_repo_url" in all_secrets:
+                csv_repo_url = st.secrets["csv_repo_url"]
+            
+            # Try admin_users level
+            if not github_token and "admin_users" in all_secrets:
+                admin_users = dict(st.secrets["admin_users"])
+                if "github_token" in admin_users:
+                    github_token = admin_users["github_token"]
+                if "csv_repo_url" in admin_users:
+                    csv_repo_url = admin_users["csv_repo_url"]
         
         if not github_token or not csv_repo_url:
             st.error("❌ GitHub credentials not configured. Please add github_token and csv_repo_url to secrets.")
-            # Try direct fallback
-            try:
-                import json
-                import os
-                config_path = os.path.join(os.path.dirname(__file__), "local_config.json")
-                if os.path.exists(config_path):
-                    with open(config_path, 'r') as f:
-                        config = json.load(f)
-                    github_token = config.get("GITHUB_TOKEN", "")
-                    csv_repo_url = config.get("CSV_REPO_URL", "")
-                    st.success("✅ Using fallback local_config.json credentials")
-            except:
-                return pd.DataFrame(), 0
+            return pd.DataFrame(), 0
         
         # Extract owner and repo from URL
         if "/tree/" in csv_repo_url:
@@ -767,8 +771,27 @@ def load_all_csv_files_without_limits():
         import gzip
         from io import StringIO
         
-        # Get GitHub credentials from centralized auth module
-        github_token, csv_repo_url = get_github_credentials()
+        # Try to get GitHub credentials from secrets (working pattern from 2.7)
+        github_token = None
+        csv_repo_url = None
+        
+        # Check for secrets in multiple possible locations
+        if hasattr(st, 'secrets'):
+            all_secrets = dict(st.secrets)
+            
+            # Try root level first
+            if "github_token" in all_secrets:
+                github_token = st.secrets["github_token"]
+            if "csv_repo_url" in all_secrets:
+                csv_repo_url = st.secrets["csv_repo_url"]
+            
+            # Try admin_users level
+            if not github_token and "admin_users" in all_secrets:
+                admin_users = dict(st.secrets["admin_users"])
+                if "github_token" in admin_users:
+                    github_token = admin_users["github_token"]
+                if "csv_repo_url" in admin_users:
+                    csv_repo_url = admin_users["csv_repo_url"]
         
         if not github_token or not csv_repo_url:
             st.error("❌ GitHub credentials not configured")
