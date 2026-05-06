@@ -181,16 +181,9 @@ def main():
     # Handle authentication and data loading
     show_logout_button()
     
-    # Add debugging info
-    st.sidebar.markdown("### 🐛 Debug Mode")
-    st.sidebar.markdown("Forcing cache clear and detailed logging")
-    
-    # Clear all caches to force fresh start
-    if hasattr(st, 'cache_data'):
-        st.cache_data.clear()
-    if hasattr(st, 'session_state'):
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
+    # Initialize session state if needed
+    if 'database_mode' not in st.session_state:
+        st.session_state.database_mode = 'full'
     
     # Close sidebar by default
     st.sidebar.markdown('<style>div[data-testid="stSidebar"] > div:first-child {display: none;}</style>', unsafe_allow_html=True)
@@ -205,14 +198,9 @@ def main():
     
     # Import and run the original dashboard
     try:
-        st.write("🔍 Starting dashboard execution...")
-        
         # Get the current directory and dashboard path
         current_dir = os.path.dirname(os.path.abspath(__file__))
         dashboard_path = os.path.join(current_dir, 'dashboard.py')
-        
-        st.write(f"📁 Current directory: {current_dir}")
-        st.write(f"📄 Dashboard path: {dashboard_path}")
         
         # Check if dashboard file exists
         if not os.path.exists(dashboard_path):
@@ -223,16 +211,12 @@ def main():
         original_cwd = os.getcwd()
         os.chdir(current_dir)
         
-        st.write("📖 Reading dashboard code...")
         # Read and execute the dashboard code
         with open(dashboard_path, 'r') as f:
             dashboard_code = f.read()
         
-        st.write("⚡ Executing dashboard code...")
         # Execute the dashboard code in the current namespace
         exec(dashboard_code, globals())
-        
-        st.write("✅ Dashboard execution completed")
         
         # Restore original working directory
         os.chdir(original_cwd)
@@ -243,8 +227,6 @@ def main():
     except Exception as e:
         st.error(f"Error loading dashboard: {e}")
         st.info("Please check the dashboard.py file for any syntax errors")
-        import traceback
-        st.code(traceback.format_exc())
 
 if __name__ == "__main__":
     main()
