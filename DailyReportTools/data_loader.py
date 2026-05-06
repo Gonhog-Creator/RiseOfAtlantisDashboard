@@ -8,7 +8,27 @@ from datetime import datetime
 import requests
 from io import StringIO
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from utils import calculate_daily_rate
+try:
+    from utils import calculate_daily_rate
+except ImportError:
+    try:
+        from DailyReportTools.utils import calculate_daily_rate
+    except ImportError:
+        # Fallback - define minimal function needed
+        def calculate_daily_rate(values, dates):
+            """Calculate daily growth rate from values and dates"""
+            if len(values) < 2 or len(dates) < 2:
+                return []
+            
+            daily_rates = []
+            for i in range(1, len(values)):
+                if dates[i] > dates[i-1]:  # Ensure forward time progression
+                    days_diff = (dates[i] - dates[i-1]).days
+                    if days_diff > 0:
+                        rate = (values[i] - values[i-1]) / days_diff
+                        daily_rates.append(rate)
+            
+            return daily_rates
 try:
     from auth import get_github_credentials
 except ImportError:
