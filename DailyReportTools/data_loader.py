@@ -607,7 +607,11 @@ def load_csv_files_from_github():
             # Separate cached and uncached files
             files_to_download = []
             for file_info in csv_files:
-                filename = file_info['name']
+                if isinstance(file_info, dict):
+                    filename = file_info.get('name', ''unknown)
+                else:
+                    filename = str(file_info)
+                    continue
                 if filename in memory_cache:
                     all_data.append(memory_cache[filename]['data'])
                 else:
@@ -618,6 +622,15 @@ def load_csv_files_from_github():
                 total_bytes_downloaded = 0
                 
                 def download_and_parse_file(file_info):
+                    """Download and parse a single file"""
+                    if not isinstance(file_info, dict):
+                        return None, str(file_info), "Invalid file info format"
+                    
+                    download_url = file_info.get('download_url')
+                    if not download_url:
+                        return None, file_info.get('name', 'unknown'), "No download URL"
+                    
+                    filename = file_info.get('name', 'unknown')
                     """Download and parse a single file"""
                     download_url = file_info.get('download_url')
                     if not download_url:
