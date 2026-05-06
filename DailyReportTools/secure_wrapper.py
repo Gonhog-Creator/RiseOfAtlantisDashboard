@@ -199,7 +199,12 @@ def main():
     st.sidebar.markdown('<style>div[data-testid="stSidebar"] > div:first-child {display: none;}</style>', unsafe_allow_html=True)
     
     # Load data with smart fallback
-    load_csv_files()
+    try:
+        load_csv_files()
+    except Exception as e:
+        st.error(f"❌ Error loading CSV files: {e}")
+        st.info("Please check GitHub credentials and repository access")
+        return
     
     # Import and run the original dashboard
     try:
@@ -227,6 +232,8 @@ def main():
     except Exception as e:
         st.error(f"Error loading dashboard: {e}")
         st.info("Please check the dashboard.py file for any syntax errors")
+        import traceback
+        st.code(traceback.format_exc())
 
 if __name__ == "__main__":
     main()
