@@ -179,8 +179,9 @@ def main():
     # Close sidebar by default
     st.sidebar.markdown('<style>div[data-testid="stSidebar"] > div:first-child {display: none;}</style>', unsafe_allow_html=True)
     
-    # Load data with smart fallback
-    load_csv_files()
+    # Load data with progress indicator
+    with st.spinner("🏰 Loading Realm Data..."):
+        load_csv_files()
     
     # Import and run the original dashboard
     try:
