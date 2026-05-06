@@ -9,27 +9,32 @@ import hashlib
 from functools import wraps
 
 # Import authentication functions from auth module
-try:
-    from DailyReportTools.auth import generate_token, verify_token, check_authentication, login_page, require_auth, logout, show_logout_button, get_github_credentials
-except ImportError:
-    try:
-        from DailyReportTools.auth import generate_token, verify_token, check_authentication, login_page, require_auth, logout, show_logout_button, get_github_credentials
-    except ImportError:
-        # Fallback - define minimal functions needed
-        import streamlit as st
-        def get_github_credentials():
-            try:
-                github_token = st.secrets.get("github_token", "")
-                csv_repo_url = st.secrets.get("csv_repo_url", "")
-                return github_token, csv_repo_url
-            except:
-                return "", ""
+from auth import generate_token, verify_token, check_authentication, login_page, require_auth, logout, show_logout_button
 
-# Use the auth module's credential loading
+# Configuration - Load from Streamlit secrets
 try:
-    GITHUB_TOKEN, CSV_REPO_URL = get_github_credentials()
+    ADMIN_USERS = dict(st.secrets["admin_users"])
+    
+    # Handle nested secrets (github_token and csv_repo_url might be in admin_users)
+    all_secrets = dict(st.secrets)
+    
+    GITHUB_TOKEN = None
+    CSV_REPO_URL = None
+    
+    # Try to get github_token from root level first, then from admin_users
+    if "github_token" in all_secrets:
+        GITHUB_TOKEN = st.secrets["github_token"]
+    elif "github_token" in ADMIN_USERS:
+        GITHUB_TOKEN = ADMIN_USERS["github_token"]
+    
+    # Try to get csv_repo_url from root level first, then from admin_users
+    if "csv_repo_url" in all_secrets:
+        CSV_REPO_URL = st.secrets["csv_repo_url"]
+    elif "csv_repo_url" in ADMIN_USERS:
+        CSV_REPO_URL = ADMIN_USERS["csv_repo_url"]
+    
 except Exception as e:
-    st.error(f"❌ Error loading GitHub credentials: {e}")
+    st.error(f"Please configure secrets in Streamlit Community Cloud settings!")
     st.stop()
 
 
@@ -81,15 +86,6 @@ def load_csv_from_github():
                 if isinstance(files, str):
                     st.sidebar.error(f"API returned string instead of JSON: {files[:100]}...")
                     return False
-                
-                # GitHub API might return an error object instead of a list
-                if isinstance(files, dict):
-                    if 'message' in files:
-                        st.sidebar.error(f"GitHub API error: {files['message']}")
-                        return False
-                    else:
-                        st.sidebar.error(f"Unexpected API response format: {files}")
-                        return False
                 
                 if not isinstance(files, list):
                     st.sidebar.error(f"Unexpected API response format")
@@ -153,59 +149,46 @@ def load_csv_from_github():
         return False
 
 def load_csv_files():
-    """Load CSV files based on database mode selection"""
-    # Get database mode from session state
-    database_mode = st.session_state.get('database_mode', 'full')
+    """Smart loading: Try local first, fallback to remote if empty"""
     
+    # Try local files first
+    import glob
+    csv_files = glob.glob("Daily Reports/*.csv")
+    
+    if csv_files:
+        st.sidebar.success("Using local CSV files")
+        return None
+    
+    # Fallback to remote if local is empty
+    if GITHUB_TOKEN and CSV_REPO_URL:
+        success = load_csv_from_github()
         
-    # Ensure database_mode is a string
-    if database_mode is None or not isinstance(database_mode, str):
-        database_mode = 'full'
+        if success:
+            st.sidebar.success("Using remote CSV files")
+            return None  # Let the original dashboard handle the loading
+        else:
+            st.sidebar.error("Remote files also empty")
     
-    # Display current mode
-    st.sidebar.info(f"Database Mode: {database_mode.title()}")
-    
-    # Load data based on database mode and store in session state
-    from data_loader import load_csv_files_with_mode
-    df, parsed_count = load_csv_files_with_mode(st, database_mode)
-    
-    if df is not None and not df.empty:
-        st.session_state.dashboard_data = df
-        st.session_state.database_loaded = True
-    else:
-        st.session_state.dashboard_data = pd.DataFrame()
-        st.session_state.database_loaded = False
+    # No data available
+    st.sidebar.error("No CSV files available locally or remotely")
+    return None
 
 @require_auth
 def main():
     # Handle authentication and data loading
     show_logout_button()
     
-    # Initialize session state if needed
-    if 'database_mode' not in st.session_state:
-        st.session_state.database_mode = 'full'
-    
     # Close sidebar by default
     st.sidebar.markdown('<style>div[data-testid="stSidebar"] > div:first-child {display: none;}</style>', unsafe_allow_html=True)
     
     # Load data with smart fallback
-    try:
-        load_csv_files()
-    except Exception as e:
-        st.error(f"❌ Error loading CSV files: {e}")
-        st.info("Please check GitHub credentials and repository access")
-        return
+    load_csv_files()
     
     # Import and run the original dashboard
     try:
         # Get the current directory and dashboard path
         current_dir = os.path.dirname(os.path.abspath(__file__))
         dashboard_path = os.path.join(current_dir, 'dashboard.py')
-        
-        # Check if dashboard file exists
-        if not os.path.exists(dashboard_path):
-            st.error(f"❌ Dashboard file not found: {dashboard_path}")
-            return
         
         # Change to the DailyReportTools directory to ensure relative paths work
         original_cwd = os.getcwd()
