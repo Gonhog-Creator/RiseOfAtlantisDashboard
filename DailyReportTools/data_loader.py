@@ -10,6 +10,32 @@ from io import StringIO
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from utils import calculate_daily_rate
 
+def load_csv_files_with_mode(st, database_mode='full', force_reload=False):
+    """Load CSV files based on database mode selection"""
+    if force_reload:
+        # Clear cache if needed
+        pass
+    
+    if database_mode == 'full':
+        # Full database - current behavior
+        df, new_parsed_count = load_csv_files_from_github()
+        return df, new_parsed_count
+    
+    elif database_mode == 'partial':
+        # Partial database - 2 files per day + all last 24 hours
+        df, new_parsed_count = load_partial_database_clean(st)
+        return df, new_parsed_count
+    
+    elif database_mode == 'local':
+        # Local database - use cached files with sync
+        df, new_parsed_count = load_local_database_clean(st)
+        return df, new_parsed_count
+    
+    else:
+        # Default to full mode
+        df, new_parsed_count = load_csv_files_from_github()
+        return df, new_parsed_count
+
 def parse_comprehensive_csv_from_string(content, filename):
     """Parse comprehensive CSV from string content (for GitHub loading)"""
     try:
