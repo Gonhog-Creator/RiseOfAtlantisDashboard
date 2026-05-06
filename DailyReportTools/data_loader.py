@@ -608,7 +608,7 @@ def load_csv_files_from_github():
             files_to_download = []
             for file_info in csv_files:
                 if isinstance(file_info, dict):
-                    filename = file_info.get('name', ''unknown)
+                    filename = file_info.get('name', '''unknown')
                 else:
                     filename = str(file_info)
                     continue
@@ -628,9 +628,9 @@ def load_csv_files_from_github():
                     
                     download_url = file_info.get('download_url')
                     if not download_url:
-                        return None, file_info.get('name', 'unknown'), "No download URL"
+                        return None, file_info.get('name', ''unknown''), "No download URL"
                     
-                    filename = file_info.get('name', 'unknown')
+                    filename = file_info.get('name', ''unknown'')
                     """Download and parse a single file"""
                     download_url = file_info.get('download_url')
                     if not download_url:
