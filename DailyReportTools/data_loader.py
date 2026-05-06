@@ -41,33 +41,9 @@ except ImportError:
         import os
         def get_github_credentials():
             try:
-                # Try st.secrets first
-                if hasattr(st, 'secrets'):
-                    all_secrets = dict(st.secrets)
-                    
-                    # Try root level first
-                    github_token = st.secrets.get("github_token", "")
-                    csv_repo_url = st.secrets.get("csv_repo_url", "")
-                    
-                    # If not found at root level, try admin_users level
-                    if not github_token or not csv_repo_url:
-                        admin_users = dict(st.secrets.get("admin_users", {}))
-                        if not github_token:
-                            github_token = admin_users.get("github_token", "")
-                        if not csv_repo_url:
-                            csv_repo_url = admin_users.get("csv_repo_url", "")
-                    
-                    if github_token and csv_repo_url:
-                        return github_token, csv_repo_url
-                
-                # Fallback to local_config.json
-                config_path = os.path.join(os.path.dirname(__file__), "local_config.json")
-                if os.path.exists(config_path):
-                    with open(config_path, 'r') as f:
-                        config = json.load(f)
-                    return config.get("GITHUB_TOKEN", ""), config.get("CSV_REPO_URL", "")
-                
-                return "", ""
+                github_token = st.secrets.get("github_token", "")
+                csv_repo_url = st.secrets.get("csv_repo_url", "")
+                return github_token, csv_repo_url
             except:
                 return "", ""
 
