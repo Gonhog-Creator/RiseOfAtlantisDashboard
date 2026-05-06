@@ -13,7 +13,10 @@ def load_secrets():
         # Try Streamlit Cloud secrets first
         SECRET_KEY = st.secrets["secret_key"]
         ADMIN_USERS = dict(st.secrets["admin_users"])
-        return SECRET_KEY, ADMIN_USERS, "cloud"
+        # Also load GitHub credentials
+        GITHUB_TOKEN = st.secrets.get("github_token", "")
+        CSV_REPO_URL = st.secrets.get("csv_repo_url", "")
+        return SECRET_KEY, ADMIN_USERS, GITHUB_TOKEN, CSV_REPO_URL, "cloud"
     except:
         try:
             # Fallback to local config file
@@ -24,7 +27,9 @@ def load_secrets():
                     config = json.load(f)
                 SECRET_KEY = config["SECRET_KEY"]
                 ADMIN_USERS = config["ADMIN_USERS"]
-                return SECRET_KEY, ADMIN_USERS, "local"
+                GITHUB_TOKEN = config.get("GITHUB_TOKEN", "")
+                CSV_REPO_URL = config.get("CSV_REPO_URL", "")
+                return SECRET_KEY, ADMIN_USERS, GITHUB_TOKEN, CSV_REPO_URL, "local"
             else:
                 raise FileNotFoundError("local_config.json not found")
         except Exception as e:
@@ -36,12 +41,19 @@ def load_secrets():
   "ADMIN_USERS": {
     "admin": "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8",
     "Gonhog": "2307f6b237dcc4de495b84c563d08b5cc362714c7699356a6a69f3994f51e6ae"
-  }
+  },
+  "GITHUB_TOKEN": "your-github-token-here",
+  "CSV_REPO_URL": "https://github.com/your-repo/data"
 }
             ''')
             st.stop()
 
-SECRET_KEY, ADMIN_USERS, secrets_source = load_secrets()
+SECRET_KEY, ADMIN_USERS, GITHUB_TOKEN, CSV_REPO_URL, secrets_source = load_secrets()
+
+# Make GitHub credentials available for import by other modules
+def get_github_credentials():
+    """Get GitHub credentials for use in other modules"""
+    return GITHUB_TOKEN, CSV_REPO_URL
 
 def generate_token(username):
     """Generate JWT token for authenticated user"""

@@ -9,6 +9,7 @@ import requests
 from io import StringIO
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from utils import calculate_daily_rate
+from auth import get_github_credentials
 
 def parse_comprehensive_csv_from_string(content, filename):
     """Parse comprehensive CSV from string content (for GitHub loading)"""
@@ -445,27 +446,8 @@ def parse_single_file(file_source, filename=None):
 def load_csv_files_from_github():
     """Load CSV files directly from GitHub API (no local files)"""
     try:
-        # Try to get GitHub credentials from secrets
-        github_token = None
-        csv_repo_url = None
-        
-        # Check for secrets in multiple possible locations
-        if hasattr(st, 'secrets'):
-            all_secrets = dict(st.secrets)
-            
-            # Try root level first
-            if "github_token" in all_secrets:
-                github_token = st.secrets["github_token"]
-            if "csv_repo_url" in all_secrets:
-                csv_repo_url = st.secrets["csv_repo_url"]
-            
-            # Try admin_users level
-            if not github_token and "admin_users" in all_secrets:
-                admin_users = dict(st.secrets["admin_users"])
-                if "github_token" in admin_users:
-                    github_token = admin_users["github_token"]
-                if "csv_repo_url" in admin_users:
-                    csv_repo_url = admin_users["csv_repo_url"]
+        # Get GitHub credentials from centralized auth module
+        github_token, csv_repo_url = get_github_credentials()
         
         if not github_token or not csv_repo_url:
             st.error("❌ GitHub credentials not configured. Please add github_token and csv_repo_url to secrets.")
@@ -742,26 +724,8 @@ def load_all_csv_files_without_limits():
         import gzip
         from io import StringIO
         
-        # Get GitHub credentials
-        github_token = None
-        csv_repo_url = None
-        
-        if hasattr(st, 'secrets'):
-            all_secrets = dict(st.secrets)
-            
-            # Try root level first
-            if "github_token" in all_secrets:
-                github_token = st.secrets["github_token"]
-            if "csv_repo_url" in all_secrets:
-                csv_repo_url = st.secrets["csv_repo_url"]
-            
-            # Try admin_users level
-            if not github_token and "admin_users" in all_secrets:
-                admin_users = dict(st.secrets["admin_users"])
-                if "github_token" in admin_users:
-                    github_token = admin_users["github_token"]
-                if "csv_repo_url" in admin_users:
-                    csv_repo_url = admin_users["csv_repo_url"]
+        # Get GitHub credentials from centralized auth module
+        github_token, csv_repo_url = get_github_credentials()
         
         if not github_token or not csv_repo_url:
             st.error("❌ GitHub credentials not configured")
@@ -932,8 +896,7 @@ def load_partial_database_clean(st):
         from concurrent.futures import ThreadPoolExecutor, as_completed
         
         # Get GitHub credentials
-        github_token = st.secrets["github_token"]
-        csv_repo_url = st.secrets["csv_repo_url"]
+        github_token, csv_repo_url = get_github_credentials()
         
         if not github_token or not csv_repo_url:
             st.error("❌ GitHub credentials not configured")
@@ -1064,8 +1027,7 @@ def load_local_database_clean(st):
             github_check_msg = st.info("🔍 Checking GitHub for new files...")
             try:
                 # Get GitHub credentials
-                github_token = st.secrets["github_token"]
-                csv_repo_url = st.secrets["csv_repo_url"]
+                github_token, csv_repo_url = get_github_credentials()
                 
                 if github_token and csv_repo_url:
                     # Extract owner and repo from URL
@@ -1249,8 +1211,7 @@ def sync_files_from_github(local_dir, st, missing_files=None):
         from io import StringIO
         
         # Get GitHub credentials
-        github_token = st.secrets["github_token"]
-        csv_repo_url = st.secrets["csv_repo_url"]
+        github_token, csv_repo_url = get_github_credentials()
         
         if not github_token or not csv_repo_url:
             st.error("❌ GitHub credentials not configured")

@@ -9,62 +9,20 @@ import hashlib
 from functools import wraps
 
 # Import authentication functions from auth module
-from auth import generate_token, verify_token, check_authentication, login_page, require_auth, logout, show_logout_button
+from auth import generate_token, verify_token, check_authentication, login_page, require_auth, logout, show_logout_button, get_github_credentials
 
 # Configuration - Load from Streamlit secrets or local fallback
 def load_github_secrets():
-    """Load GitHub secrets from Streamlit Cloud or local fallback"""
+    """Load GitHub secrets from centralized auth module"""
     try:
-        # Try Streamlit Cloud secrets first
-        all_secrets = dict(st.secrets)
-        GITHUB_TOKEN = None
-        CSV_REPO_URL = None
-        
-        # Try to get github_token from root level first, then from admin_users
-        if "github_token" in all_secrets:
-            GITHUB_TOKEN = st.secrets["github_token"]
-        elif "admin_users" in all_secrets and "github_token" in all_secrets["admin_users"]:
-            GITHUB_TOKEN = st.secrets["admin_users"]["github_token"]
-        
-        # Try to get csv_repo_url from root level first, then from admin_users
-        if "csv_repo_url" in all_secrets:
-            CSV_REPO_URL = st.secrets["csv_repo_url"]
-        elif "admin_users" in all_secrets and "csv_repo_url" in all_secrets["admin_users"]:
-            CSV_REPO_URL = st.secrets["admin_users"]["csv_repo_url"]
-        
-        if GITHUB_TOKEN and CSV_REPO_URL:
-            return GITHUB_TOKEN, CSV_REPO_URL, "cloud"
+        github_token, csv_repo_url = get_github_credentials()
+        if github_token and csv_repo_url:
+            return github_token, csv_repo_url, "cloud"
         else:
-            raise ValueError("Missing GitHub credentials in Streamlit secrets")
-            
-    except:
-        try:
-            # Fallback to local config file
-            import os
-            config_path = os.path.join(os.path.dirname(__file__), "local_config.json")
-            if os.path.exists(config_path):
-                with open(config_path, 'r') as f:
-                    config = json.load(f)
-                GITHUB_TOKEN = config["GITHUB_TOKEN"]
-                CSV_REPO_URL = config["CSV_REPO_URL"]
-                return GITHUB_TOKEN, CSV_REPO_URL, "local"
-            else:
-                raise FileNotFoundError("local_config.json not found")
-        except Exception as e:
-            st.error("❌ Please configure GitHub secrets in Streamlit Community Cloud settings or create local_config.json")
-            st.info("For local development, create local_config.json with:")
-            st.code('''
-{
-  "SECRET_KEY": "your-secret-key-here",
-  "ADMIN_USERS": {
-    "admin": "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8",
-    "Gonhog": "2307f6b237dcc4de495b84c563d08b5cc362714c7699356a6a69f3994f51e6ae"
-  },
-  "GITHUB_TOKEN": "github_pat_your_token_here",
-  "CSV_REPO_URL": "https://github.com/Gonhog-Creator/RoaRealmData"
-}
-            ''')
-            st.stop()
+            raise ValueError("Missing GitHub credentials")
+    except Exception as e:
+        st.error("❌ GitHub credentials not configured")
+        return None, None, "error"
 
 GITHUB_TOKEN, CSV_REPO_URL, github_secrets_source = load_github_secrets()
 
