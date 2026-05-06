@@ -557,14 +557,19 @@ def load_csv_files_from_github():
         csv_files = []
         
         # Check root directory for CSV files (backward compatibility)
-        for f in files:
-            if (f.get('name', '').endswith('.csv') or f.get('name', '').endswith('.csv.gz')) and f.get('type') == 'file':
-                csv_files.append(f)
-            elif f.get('type') == 'dir':
-                # Check if this looks like a monthly directory (contains digits)
-                # Recursively check subdirectories for CSV files
-                sub_files = get_csv_files_from_directory(f['name'], owner, repo, github_token, headers)
-                csv_files.extend(sub_files)
+        if isinstance(files, list):
+            for f in files:
+                if (f.get('name', '').endswith('.csv') or f.get('name', '').endswith('.csv.gz')) and f.get('type') == 'file':
+                    csv_files.append(f)
+                elif f.get('type') == 'dir':
+                    # Check if this looks like a monthly directory (contains digits)
+                    # Recursively check subdirectories for CSV files
+                    try:
+                        sub_files = get_csv_files_from_directory(f['name'], owner, repo, github_token, headers)
+                        csv_files.extend(sub_files)
+                    except Exception as e:
+                        st.error(f"❌ Error accessing directory {f['name']}: {e}")
+                        continue
         
         if not csv_files:
             st.warning("⚠️ No CSV files found in remote repository")
